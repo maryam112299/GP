@@ -1,6 +1,7 @@
 import json
 import logging
 import sqlite3
+from time import perf_counter
 from datetime import datetime, UTC
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +10,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from models import (
     AnalysisRequest,
     AnalysisResponse,
+    ScanHistoryResponse,
     SignupRequest,
     LoginRequest,
     AuthResponse,
@@ -16,7 +18,15 @@ from models import (
     UpdateProfileRequest,
 )
 from analysis_service import analysis_service
-from db import init_db, create_user, get_user_by_email, get_user_by_id, update_user_profile
+from db import (
+    init_db,
+    create_user,
+    get_user_by_email,
+    get_user_by_id,
+    update_user_profile,
+    create_analysis_record,
+    get_analyses_by_user_id,
+)
 from auth import hash_password, verify_password, create_access_token, decode_access_token
 
 # Setup logging
@@ -151,6 +161,12 @@ async def edit_profile(request: UpdateProfileRequest, current_user=Depends(get_c
 async def startup_event():
     init_db()
 
+
+@app.get("/api/scans", response_model=ScanHistoryResponse)
+async def get_user_scans(current_user=Depends(get_current_user)):
+    scans = get_analyses_by_user_id(current_user["id"])
+    return ScanHistoryResponse(scans=scans)
+
 @app.get("/")
 async def root():
     """Health check endpoint"""
@@ -170,6 +186,7 @@ async def analyze_agent(request: AnalysisRequest, current_user=Depends(get_curre
     ATFAA framework for behavioral threat identification.
     """
     try:
+        started_at = perf_counter()
         logging.info("=" * 60)
         logging.info("AI AGENT SECURITY SCANNER - RISK ANALYSIS")
         logging.info("=" * 60)
@@ -178,6 +195,15 @@ async def analyze_agent(request: AnalysisRequest, current_user=Depends(get_curre
         
         # Perform analysis
         result = await analysis_service.analyze_agent(request.agent_description)
+        duration_seconds = round(perf_counter() - started_at, 3)
+
+        create_analysis_record(
+            user_id=current_user["id"],
+            input_text=request.agent_description,
+            output_json=result.model_dump_json(),
+            duration_seconds=duration_seconds,
+            created_at=datetime.now(UTC).isoformat(),
+        )
         
         # Save mission file
         with open("mission_file.json", "w") as f:

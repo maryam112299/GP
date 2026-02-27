@@ -1,6 +1,7 @@
 import os
+import json
 import sqlite3
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,6 +39,19 @@ def init_db() -> None:
             """
         )
         _ensure_profile_columns(connection)
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS analyses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                input_text TEXT NOT NULL,
+                output_json TEXT NOT NULL,
+                duration_seconds REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
         connection.commit()
 
 
@@ -234,3 +248,65 @@ def update_user_profile(
         connection.commit()
 
     return get_user_by_id(user_id)
+
+
+def create_analysis_record(
+    user_id: int,
+    input_text: str,
+    output_json: str,
+    duration_seconds: float,
+    created_at: str,
+) -> Dict[str, Any]:
+    with _get_connection() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO analyses (user_id, input_text, output_json, duration_seconds, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (user_id, input_text, output_json, duration_seconds, created_at),
+        )
+        analysis_id = cursor.lastrowid
+        connection.commit()
+
+        row = connection.execute(
+            """
+            SELECT id, user_id, input_text, output_json, duration_seconds, created_at
+            FROM analyses
+            WHERE id = ?
+            """,
+            (analysis_id,),
+        ).fetchone()
+
+    return {
+        "id": row["id"],
+        "user_id": row["user_id"],
+        "input_text": row["input_text"],
+        "output": json.loads(row["output_json"]),
+        "duration_seconds": row["duration_seconds"],
+        "created_at": row["created_at"],
+    }
+
+
+def get_analyses_by_user_id(user_id: int) -> List[Dict[str, Any]]:
+    with _get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, user_id, input_text, output_json, duration_seconds, created_at
+            FROM analyses
+            WHERE user_id = ?
+            ORDER BY datetime(created_at) DESC
+            """,
+            (user_id,),
+        ).fetchall()
+
+    return [
+        {
+            "id": row["id"],
+            "user_id": row["user_id"],
+            "input_text": row["input_text"],
+            "output": json.loads(row["output_json"]),
+            "duration_seconds": row["duration_seconds"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]

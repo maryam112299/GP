@@ -28,6 +28,7 @@ class InjectionType(str, Enum):
 class AttackObjective(BaseModel):
     vulnerability_type: str = Field(description="e.g., Data Exfiltration, Tool Hijacking, SQLi")
     priority: str = Field(description="CRITICAL, HIGH, MEDIUM, LOW")
+    severity: float = Field(default=0.0, description="Computed severity score from 0.0 to 10.0")
     maestro_layer: MaestroLayer
     atfaa_domain: AtfaaThreat
     injection_type: InjectionType
@@ -47,6 +48,18 @@ class AnalysisResponse(BaseModel):
     agent_id: str
     risk_summary: str
     attack_plan: List[AttackObjective]
+
+
+class ScanRecord(BaseModel):
+    id: int
+    input_text: str
+    output: AnalysisResponse
+    duration_seconds: float
+    created_at: str
+
+
+class ScanHistoryResponse(BaseModel):
+    scans: List[ScanRecord]
 
 
 class SignupRequest(BaseModel):

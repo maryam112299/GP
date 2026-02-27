@@ -8,6 +8,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface ResultsDisplayProps {
   results: MissionFile;
+  durationSeconds?: number;
 }
 
 const priorityColors = {
@@ -24,7 +25,7 @@ const priorityIcons = {
   LOW: '🔵',
 };
 
-export default function ResultsDisplay({ results }: ResultsDisplayProps) {
+export default function ResultsDisplay({ results, durationSeconds }: ResultsDisplayProps) {
   const downloadJSON = () => {
     const dataStr = JSON.stringify(results, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
@@ -52,6 +53,9 @@ export default function ResultsDisplay({ results }: ResultsDisplayProps) {
             <div>
               <h3 className="text-xl font-bold text-white">Analysis Complete</h3>
               <p className="text-gray-400 text-sm">Agent ID: {results.agent_id}</p>
+              {typeof durationSeconds === 'number' && (
+                <p className="text-gray-400 text-sm">Time taken: {durationSeconds.toFixed(2)}s</p>
+              )}
             </div>
           </div>
           <motion.button
@@ -109,6 +113,9 @@ export default function ResultsDisplay({ results }: ResultsDisplayProps) {
                     <div className="flex items-center space-x-2 mt-1">
                       <span className={`px-2 py-1 rounded text-xs font-medium border ${priorityColors[attack.priority]}`}>
                         {attack.priority}
+                      </span>
+                      <span className="px-2 py-1 rounded text-xs font-medium border border-purple-500/40 bg-purple-500/15 text-purple-300">
+                        Severity: {typeof attack.severity === 'number' ? attack.severity.toFixed(2) : 'N/A'}/10
                       </span>
                       <span className="text-xs text-gray-400">Target: {attack.target_asset}</span>
                     </div>

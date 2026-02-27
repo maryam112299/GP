@@ -46,6 +46,7 @@ const getAuthErrorMessage = (data: any, fallback = 'Authentication failed') => {
 
 export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisDurationSeconds, setAnalysisDurationSeconds] = useState<number | null>(null);
   const [results, setResults] = useState<MissionFile | null>(null);
   const [token, setToken] = useState<string>('');
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -95,6 +96,8 @@ export default function Home() {
 
     setIsAnalyzing(true);
     setResults(null);
+    setAnalysisDurationSeconds(null);
+    const startedAt = performance.now();
 
     try {
       const response = await fetch(`${API_BASE}/api/analyze`, {
@@ -119,6 +122,8 @@ export default function Home() {
 
       const data = await response.json();
       setResults(data);
+      const duration = (performance.now() - startedAt) / 1000;
+      setAnalysisDurationSeconds(duration);
       toast.success('Analysis completed successfully!');
     } catch (error) {
       console.error('Error:', error);
@@ -297,7 +302,14 @@ export default function Home() {
               )}
             </AnimatePresence>
 
-            <AnimatePresence>{results && !isAnalyzing && <ResultsDisplay results={results} />}</AnimatePresence>
+            <AnimatePresence>
+              {results && !isAnalyzing && (
+                <ResultsDisplay
+                  results={results}
+                  durationSeconds={analysisDurationSeconds ?? undefined}
+                />
+              )}
+            </AnimatePresence>
           </>
         )}
       </div>

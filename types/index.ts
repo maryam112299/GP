@@ -23,6 +23,7 @@ export enum InjectionType {
 export interface AttackObjective {
   vulnerability_type: string;
   priority: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  severity: number;
   maestro_layer: MaestroLayer;
   atfaa_domain: AtfaaThreat;
   injection_type: InjectionType;
@@ -41,4 +42,16 @@ export interface AnalysisResponse {
   success: boolean;
   data?: MissionFile;
   error?: string;
+}
+
+export interface ScanRecord {
+  id: number;
+  input_text: string;
+  output: MissionFile;
+  duration_seconds: number;
+  created_at: string;
+}
+
+export interface ScanHistoryResponse {
+  scans: ScanRecord[];
 }

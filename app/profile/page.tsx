@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Loader2, LogOut, UserRound } from 'lucide-react';
 import toast from 'react-hot-toast';
+import type { ScanRecord, ScanHistoryResponse } from '@/types';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -62,6 +63,8 @@ export default function ProfilePage() {
   const [profileForm, setProfileForm] = useState<ProfileFormState>(emptyProfileForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingScans, setIsLoadingScans] = useState(false);
+  const [scanHistory, setScanHistory] = useState<ScanRecord[]>([]);
 
   const toProfileForm = (profile: UserProfile): ProfileFormState => ({
     email: profile.email || '',
@@ -101,6 +104,30 @@ export default function ProfilePage() {
       .finally(() => setIsLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!token) {
+      setScanHistory([]);
+      return;
+    }
+
+    setIsLoadingScans(true);
+    fetch(`${API_BASE}/api/scans`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error('Failed to load scan history');
+        }
+
+        const history: ScanHistoryResponse = await res.json();
+        setScanHistory(history.scans || []);
+      })
+      .catch(() => {
+        toast.error('Could not load scan history');
+      })
+      .finally(() => setIsLoadingScans(false));
+  }, [token]);
+
   const handleProfileChange = (field: keyof ProfileFormState, value: string) => {
     setProfileForm((previous) => ({ ...previous, [field]: value }));
   };
@@ -133,6 +160,23 @@ export default function ProfilePage() {
       setUser(data);
       setProfileForm(toProfileForm(data));
       toast.success('Profile updated successfully');
+
+      setIsLoadingScans(true);
+      fetch(`${API_BASE}/api/scans`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            throw new Error('Failed to load scan history');
+          }
+
+          const history: ScanHistoryResponse = await res.json();
+          setScanHistory(history.scans || []);
+        })
+        .catch(() => {
+          toast.error('Could not refresh scan history');
+        })
+        .finally(() => setIsLoadingScans(false));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update profile';
       toast.error(message);
@@ -205,74 +249,114 @@ export default function ProfilePage() {
             </Link>
           </div>
         ) : (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-dark rounded-xl p-6 border border-cyan-500/30">
-            <p className="text-gray-400 mb-5 text-sm">Update your account profile details.</p>
-            <form onSubmit={saveProfile} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="text"
-                placeholder="First name"
-                value={profileForm.first_name}
-                onChange={(e) => handleProfileChange('first_name', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                required
-              />
-              <input
-                type="text"
-                placeholder="Last name"
-                value={profileForm.last_name}
-                onChange={(e) => handleProfileChange('last_name', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="email"
-                placeholder="Email"
-                value={profileForm.email}
-                onChange={(e) => handleProfileChange('email', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                required
-              />
-              <input
-                type="text"
-                placeholder="Mobile number"
-                value={profileForm.mobile_number}
-                onChange={(e) => handleProfileChange('mobile_number', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="text"
-                placeholder="Company name"
-                value={profileForm.company_name}
-                onChange={(e) => handleProfileChange('company_name', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="text"
-                placeholder="Job role"
-                value={profileForm.job_role}
-                onChange={(e) => handleProfileChange('job_role', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="text"
-                placeholder="Country"
-                value={profileForm.country}
-                onChange={(e) => handleProfileChange('country', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 md:col-span-2"
-              />
+          <div className="space-y-8">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-dark rounded-xl p-6 border border-cyan-500/30">
+              <p className="text-gray-400 mb-5 text-sm">Update your account profile details.</p>
+              <form onSubmit={saveProfile} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input
+                  type="text"
+                  placeholder="First name"
+                  value={profileForm.first_name}
+                  onChange={(e) => handleProfileChange('first_name', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Last name"
+                  value={profileForm.last_name}
+                  onChange={(e) => handleProfileChange('last_name', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={profileForm.email}
+                  onChange={(e) => handleProfileChange('email', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Mobile number"
+                  value={profileForm.mobile_number}
+                  onChange={(e) => handleProfileChange('mobile_number', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Company name"
+                  value={profileForm.company_name}
+                  onChange={(e) => handleProfileChange('company_name', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Job role"
+                  value={profileForm.job_role}
+                  onChange={(e) => handleProfileChange('job_role', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Country"
+                  value={profileForm.country}
+                  onChange={(e) => handleProfileChange('country', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 md:col-span-2"
+                />
 
-              <button
-                type="submit"
-                disabled={isSaving}
-                className={`md:col-span-2 py-3 rounded-lg text-white font-semibold transition-colors ${
-                  isSaving
-                    ? 'bg-gray-700 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-cyan-500 to-green-600 hover:from-cyan-600 hover:to-green-700'
-                }`}
-              >
-                {isSaving ? 'Saving Profile...' : 'Save Profile'}
-              </button>
-            </form>
-          </motion.div>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className={`md:col-span-2 py-3 rounded-lg text-white font-semibold transition-colors ${
+                    isSaving
+                      ? 'bg-gray-700 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-cyan-500 to-green-600 hover:from-cyan-600 hover:to-green-700'
+                  }`}
+                >
+                  {isSaving ? 'Saving Profile...' : 'Save Profile'}
+                </button>
+              </form>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-dark rounded-xl p-6 border border-green-500/30">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-white">My Scan History</h2>
+                {isLoadingScans && <Loader2 className="w-5 h-5 text-green-400 animate-spin" />}
+              </div>
+
+              {!isLoadingScans && scanHistory.length === 0 ? (
+                <p className="text-gray-400 text-sm">No scans yet. Run an analysis from the main page and it will appear here.</p>
+              ) : (
+                <div className="space-y-4">
+                  {scanHistory.map((scan) => (
+                    <div key={scan.id} className="rounded-lg border border-gray-700/50 bg-slate-900/40 p-4">
+                      <div className="flex flex-wrap items-center gap-3 mb-2">
+                        <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-300 border border-green-500/30">
+                          {scan.duration_seconds.toFixed(2)}s
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {new Date(scan.created_at).toLocaleString()}
+                        </span>
+                      </div>
+
+                      <div className="mb-3">
+                        <p className="text-xs text-gray-400 mb-1">Input</p>
+                        <p className="text-sm text-gray-200 whitespace-pre-wrap">{scan.input_text}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">Output</p>
+                        <p className="text-sm text-cyan-300 mb-1">Agent ID: {scan.output.agent_id}</p>
+                        <p className="text-sm text-gray-300 mb-2">{scan.output.risk_summary}</p>
+                        <p className="text-xs text-gray-400">Vulnerabilities: {scan.output.attack_plan.length}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          </div>
         )}
       </div>
     </main>

@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 
 from langchain_ollama import ChatOllama
 from models import MissionFile, MaestroLayer, AtfaaThreat, InjectionType
+from scoring import score_attack
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -160,6 +161,9 @@ def run_analysis(agent_description: str) -> Optional[MissionFile]:
         repaired = _repair_payload(payload)
         validated_report = MissionFile.model_validate(repaired)
 
+        for objective in validated_report.attack_plan:
+            score_attack(objective)
+
         elapsed = time.time() - start_time
         print(f"[!] Analysis complete in {elapsed:.2f} seconds.")
         return validated_report
@@ -183,7 +187,10 @@ class AnalysisService:
             "risk_summary": "Analysis failed to parse full model output; fallback probe generated.",
             "attack_plan": get_hardcoded_probes(),
         }
-        return MissionFile.model_validate(fallback)
+        fallback_report = MissionFile.model_validate(fallback)
+        for objective in fallback_report.attack_plan:
+            score_attack(objective)
+        return fallback_report
 
 
 analysis_service = AnalysisService()
