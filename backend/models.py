@@ -2,7 +2,10 @@ from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, Field, EmailStr
 
-# --- Framework Definitions (MAESTRO & ATFAA) ---
+
+# ---------------------------------------------------------------------------
+# Framework Enumerations (MAESTRO & ATFAA)
+# ---------------------------------------------------------------------------
 
 class MaestroLayer(str, Enum):
     FOUNDATION_MODEL = "Foundation Model"
@@ -12,55 +15,125 @@ class MaestroLayer(str, Enum):
     SECURITY = "Security & Compliance"
     AGENT_ECOSYSTEM = "Agent Ecosystem"
 
+
 class AtfaaThreat(str, Enum):
-    COGNITIVE = "Cognitive Architecture"  # Goal drift
-    PERSISTENCE = "Temporal Persistence"  # Memory poisoning
-    EXECUTION = "Operational Execution"  # Tool abuse / sending unauthorized data
-    BOUNDARY = "Trust Boundary Violation"  # Untrusted input processing
-    GOVERNANCE = "Governance Circumvention"  # Bypassing oversight
+    COGNITIVE = "Cognitive Architecture"       # Goal drift
+    PERSISTENCE = "Temporal Persistence"       # Memory poisoning
+    EXECUTION = "Operational Execution"        # Tool abuse / unauthorized data
+    BOUNDARY = "Trust Boundary Violation"      # Untrusted input processing
+    GOVERNANCE = "Governance Circumvention"    # Bypassing oversight
+
 
 class InjectionType(str, Enum):
     DIRECT = "Direct (User Prompt)"
     INDIRECT = "Indirect (Data Source/File/PDF)"
 
-# --- Request/Response Models ---
+
+class AnalysisMode(str, Enum):
+    QUICK = "quick"
+    EXPERT = "expert"
+
+
+# ---------------------------------------------------------------------------
+# Vulnerability scope categories (used by Expert Mode)
+# ---------------------------------------------------------------------------
+
+class VulnScope(str, Enum):
+    RCE = "RCE / Command Injection"
+    SQLI = "SQL Injection"
+    SSRF = "SSRF"
+    PROMPT_INJECTION = "Prompt Injection"
+    ACCESS_CONTROL = "Access Control (RBAC)"
+    PDF_LFI = "Insecure PDF / LFI"
+    DATA_EXFIL = "Indirect Data Exfiltration"
+    SYSTEM_PROMPT_LEAK = "System Prompt Leak"
+
+
+# ---------------------------------------------------------------------------
+# Core Analysis Models
+# ---------------------------------------------------------------------------
 
 class AttackObjective(BaseModel):
     vulnerability_type: str = Field(description="e.g., Data Exfiltration, Tool Hijacking, SQLi")
-    priority: str = Field(description="CRITICAL, HIGH, MEDIUM, LOW")
-    severity: float = Field(default=0.0, description="Computed severity score from 0.0 to 10.0")
+    priority: str = Field(description="CRITICAL, HIGH, MEDIUM, or LOW")
+    severity: float = Field(default=0.0, description="Computed severity score 0.0–10.0")
     maestro_layer: MaestroLayer
     atfaa_domain: AtfaaThreat
     injection_type: InjectionType
-    target_asset: str = Field(description="The specific tool or API to target (e.g. email_reader)")
-    exploit_strategy: str = Field(description="The 'How': e.g. Cascading tool calls to exfiltrate files")
-    adversarial_objective: str = Field(description="The 'Seed' mission for the prompt generator")
+    target_asset: str = Field(description="The specific tool or API being targeted")
+    exploit_strategy: str = Field(description="How the attack is executed")
+    adversarial_objective: str = Field(description="The adversary's end goal")
+
 
 class MissionFile(BaseModel):
     agent_id: str
     risk_summary: str
     attack_plan: List[AttackObjective]
 
+
+# ---------------------------------------------------------------------------
+# Analysis Request Models
+# ---------------------------------------------------------------------------
+
+class QuickAnalysisRequest(BaseModel):
+    """Minimal input — backend infers defaults and uses a concise prompt."""
+    mode: AnalysisMode = AnalysisMode.QUICK
+    agent_description: str = Field(
+        min_length=10,
+        description="Brief description of the AI agent to analyse",
+    )
+
+
+class ExpertAnalysisRequest(BaseModel):
+    """Full structured input for a deep, scope-controlled security analysis."""
+    mode: AnalysisMode = AnalysisMode.EXPERT
+    agent_name: str = Field(min_length=1, max_length=200, description="Name of the agent")
+    mission: str = Field(min_length=5, description="Agent's primary mission / goal")
+    tools: List[str] = Field(default_factory=list, description="Tools available to the agent")
+    data_sources: List[str] = Field(default_factory=list, description="Data the agent consumes")
+    architecture_notes: Optional[str] = Field(
+        default="",
+        description="Additional architecture context (APIs, external services, DBs, etc.)",
+    )
+    scope: List[VulnScope] = Field(
+        default_factory=list,
+        description="Vulnerability categories to focus on (empty = all)",
+    )
+
+
 class AnalysisRequest(BaseModel):
-    agent_description: str = Field(description="Description of the AI agent to analyze")
+    """Union request — accepts either mode. Frontend should send one of the sub-types."""
+    mode: AnalysisMode = AnalysisMode.QUICK
+    agent_description: str = Field(description="Full agent description (assembled by frontend or backend)")
+    # Expert fields (optional)
+    agent_name: Optional[str] = None
+    mission: Optional[str] = None
+    tools: Optional[List[str]] = None
+    data_sources: Optional[List[str]] = None
+    architecture_notes: Optional[str] = None
+    scope: Optional[List[VulnScope]] = None
 
-class AnalysisResponse(BaseModel):
-    agent_id: str
-    risk_summary: str
-    attack_plan: List[AttackObjective]
 
+# ---------------------------------------------------------------------------
+# Scan History Models
+# ---------------------------------------------------------------------------
 
 class ScanRecord(BaseModel):
     id: int
     input_text: str
-    output: AnalysisResponse
+    output: "AnalysisResponse"
     duration_seconds: float
     created_at: str
+    mode: AnalysisMode = AnalysisMode.QUICK
 
 
 class ScanHistoryResponse(BaseModel):
     scans: List[ScanRecord]
 
+
+# ---------------------------------------------------------------------------
+# Auth & Profile Models
+# ---------------------------------------------------------------------------
 
 class SignupRequest(BaseModel):
     email: EmailStr
@@ -98,3 +171,13 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserProfile
+
+
+class AnalysisResponse(BaseModel):
+    agent_id: str
+    risk_summary: str
+    attack_plan: List[AttackObjective]
+
+
+# Resolve forward reference
+ScanRecord.model_rebuild()

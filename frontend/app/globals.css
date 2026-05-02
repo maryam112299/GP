@@ -1,0 +1,284 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Design Tokens
+--------------------------------------------------------------------------- */
+:root {
+  /* Brand palette */
+  --color-bg-base:       #080c12;
+  --color-bg-surface:    #0d1117;
+  --color-bg-elevated:   #161b24;
+  --color-bg-hover:      #1e2736;
+
+  --color-border:        rgba(255, 255, 255, 0.07);
+  --color-border-accent: rgba(6, 214, 160, 0.25);
+  --color-border-cyan:   rgba(34, 211, 238, 0.25);
+
+  --color-accent-green:  #06d6a0;
+  --color-accent-cyan:   #22d3ee;
+  --color-accent-purple: #a78bfa;
+
+  --color-text-primary:  #f0f6fc;
+  --color-text-secondary:#8b949e;
+  --color-text-muted:    #484f58;
+
+  /* Priority colours */
+  --color-critical: #f85149;
+  --color-high:     #fb8c00;
+  --color-medium:   #f0c000;
+  --color-low:      #58a6ff;
+
+  /* Spacing scale */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* Shadows */
+  --shadow-glow-green:  0 0 24px rgba(6, 214, 160, 0.15);
+  --shadow-glow-cyan:   0 0 24px rgba(34, 211, 238, 0.15);
+  --shadow-card:        0 4px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------------------------------------------------------------------------
+   Base Reset
+--------------------------------------------------------------------------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: 'Outfit', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+}
+
+/* Code / mono text */
+code, kbd, pre, .font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ---------------------------------------------------------------------------
+   Scrollbar
+--------------------------------------------------------------------------- */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(6, 214, 160, 0.3);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(6, 214, 160, 0.5); }
+
+/* ---------------------------------------------------------------------------
+   Glass Morphism
+--------------------------------------------------------------------------- */
+.glass {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border);
+}
+
+.glass-dark {
+  background: rgba(13, 17, 23, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border);
+}
+
+.glass-card {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------------------------------------------------------------------------
+   Input base style
+--------------------------------------------------------------------------- */
+.input-base {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--color-bg-surface);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+.input-base::placeholder { color: var(--color-text-muted); }
+
+.input-base:focus {
+  border-color: var(--color-accent-green);
+  box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.12);
+}
+
+/* ---------------------------------------------------------------------------
+   Button system
+--------------------------------------------------------------------------- */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #06d6a0, #0ea5e9);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 16px rgba(6, 214, 160, 0.25);
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(6, 214, 160, 0.35);
+}
+
+.btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+.btn-primary:disabled {
+  background: var(--color-bg-hover);
+  color: var(--color-text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  font-size: 0.875rem;
+}
+
+.btn-ghost:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(248, 81, 73, 0.12);
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, 0.25);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.875rem;
+}
+
+.btn-danger:hover { background: rgba(248, 81, 73, 0.2); }
+
+/* ---------------------------------------------------------------------------
+   Badge system
+--------------------------------------------------------------------------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.badge-critical { background: rgba(248, 81, 73, 0.15);  color: #f85149; border: 1px solid rgba(248,81,73,0.3);  }
+.badge-high     { background: rgba(251,140,0,0.15);     color: #fb8c00; border: 1px solid rgba(251,140,0,0.3);  }
+.badge-medium   { background: rgba(240,192,0,0.15);     color: #f0c000; border: 1px solid rgba(240,192,0,0.3);  }
+.badge-low      { background: rgba(88,166,255,0.15);    color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); }
+.badge-quick    { background: rgba(6,214,160,0.12);     color: #06d6a0; border: 1px solid rgba(6,214,160,0.25); }
+.badge-expert   { background: rgba(167,139,250,0.12);   color: #a78bfa; border: 1px solid rgba(167,139,250,0.25); }
+
+/* ---------------------------------------------------------------------------
+   Animated background blobs
+--------------------------------------------------------------------------- */
+.blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.12;
+  pointer-events: none;
+  animation: float 8s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------------------
+   Keyframe animations
+--------------------------------------------------------------------------- */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%       { transform: translateY(-24px) scale(1.04); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(6, 214, 160, 0.2); }
+  50%       { box-shadow: 0 0 24px rgba(6, 214, 160, 0.5); }
+}
+
+@keyframes gradient-move {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.animate-glow { animation: glow-pulse 2s ease-in-out infinite; }
+
+/* ---------------------------------------------------------------------------
+   Utility
+--------------------------------------------------------------------------- */
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .gradient-text {
+    background: linear-gradient(135deg, #06d6a0, #22d3ee);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .gradient-text-purple {
+    background: linear-gradient(135deg, #a78bfa, #22d3ee);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}

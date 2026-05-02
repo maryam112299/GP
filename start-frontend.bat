@@ -6,6 +6,9 @@ echo Starting Frontend Server
 echo ================================
 echo.
 
+:: Move into the frontend folder
+cd /d "%~dp0frontend"
+
 :: Install dependencies only when package-lock.json changes
 set "LOCK_FILE=package-lock.json"
 set "LOCK_STAMP=node_modules\.lock.sha256"
