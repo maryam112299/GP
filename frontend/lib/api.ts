@@ -138,6 +138,8 @@ export const scansApi = {
 export interface QuickAnalysisPayload {
   mode: 'quick';
   agent_description: string;
+  uses_mcp: boolean;
+  uses_rag: boolean;
 }
 
 export interface ExpertAnalysisPayload {
@@ -149,6 +151,8 @@ export interface ExpertAnalysisPayload {
   data_sources: string[];
   architecture_notes: string;
   scope: string[];
+  uses_mcp: boolean;
+  uses_rag: boolean;
 }
 
 export type AnalysisPayload = QuickAnalysisPayload | ExpertAnalysisPayload;
@@ -166,8 +170,12 @@ export const analysisApi = {
     return handleResponse<MissionFile>(res);
   },
 
-  buildQuickPayload(description: string): QuickAnalysisPayload {
-    return { mode: 'quick', agent_description: description };
+  buildQuickPayload(
+    description: string,
+    uses_mcp: boolean,
+    uses_rag: boolean,
+  ): QuickAnalysisPayload {
+    return { mode: 'quick', agent_description: description, uses_mcp, uses_rag };
   },
 
   buildExpertPayload(config: ExpertConfig): ExpertAnalysisPayload {
@@ -191,6 +199,8 @@ export const analysisApi = {
       data_sources: config.data_sources,
       architecture_notes: config.architecture_notes,
       scope: config.scope,
+      uses_mcp: config.uses_mcp,
+      uses_rag: config.uses_rag,
     };
   },
 };

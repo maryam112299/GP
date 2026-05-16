@@ -31,6 +31,7 @@ def assign_base_scores(obj: AttackObjective):
     privilege = 5
     sensitivity = 5
 
+    # --- Direct attacks ---
     if "rce" in vulnerability or "command injection" in vulnerability:
         impact = 10
         exploitability = 8
@@ -45,18 +46,117 @@ def assign_base_scores(obj: AttackObjective):
         impact = 8
         exploitability = 7
         exposure = 9
-    elif "prompt injection" in vulnerability:
-        impact = 6
-        exploitability = 9
-        exposure = 10
     elif "rbac" in vulnerability or "access control" in vulnerability:
         impact = 9
         exploitability = 6
         privilege = 8
+    elif "system prompt leak" in vulnerability:
+        impact = 7
+        exploitability = 8
+        exposure = 8
+        sensitivity = 9
+
+    # --- Indirect attacks ---
     elif "pdf" in vulnerability or "lfi" in vulnerability:
         impact = 7
         exploitability = 6
         exposure = 8
+    elif "indirect data exfil" in vulnerability or "data exfil" in vulnerability:
+        impact = 8
+        exploitability = 7
+        exposure = 8
+        sensitivity = 9
+
+    # Prompt injection (direct and indirect — matched after more specific checks)
+    elif "prompt injection" in vulnerability:
+        impact = 6
+        exploitability = 9
+        exposure = 10
+
+    # --- Multi-turn attacks ---
+    elif "multi-turn" in vulnerability or "multiturn" in vulnerability:
+        impact = 7
+        exploitability = 8
+        exposure = 9
+        sensitivity = 6
+    elif "memory" in vulnerability or "context poisoning" in vulnerability:
+        impact = 7
+        exploitability = 7
+        exposure = 8
+        sensitivity = 7
+
+    # --- MCP attacks ---
+    elif "mcp tool poisoning" in vulnerability:
+        impact = 9
+        exploitability = 8
+        exposure = 7
+        privilege = 7
+        sensitivity = 8
+    elif "mcp excessive permissions" in vulnerability:
+        impact = 8
+        exploitability = 6
+        exposure = 6
+        privilege = 9
+    elif "mcp missing authentication" in vulnerability:
+        impact = 9
+        exploitability = 9
+        exposure = 8
+        privilege = 8
+        sensitivity = 6
+    elif "mcp tool shadowing" in vulnerability:
+        impact = 9
+        exploitability = 7
+        exposure = 7
+        privilege = 7
+        sensitivity = 8
+    elif "rug pull" in vulnerability:
+        impact = 8
+        exploitability = 6
+        exposure = 6
+        privilege = 7
+        sensitivity = 8
+    elif "mcp insecure transport" in vulnerability:
+        impact = 7
+        exploitability = 7
+        exposure = 8
+        sensitivity = 7
+    elif "mcp cross-agent" in vulnerability or "cross-agent" in vulnerability:
+        impact = 8
+        exploitability = 7
+        exposure = 7
+        privilege = 8
+        sensitivity = 6
+
+    # --- RAG attacks ---
+    elif "rag knowledge base injection" in vulnerability or "knowledge base injection" in vulnerability:
+        impact = 9
+        exploitability = 7
+        exposure = 9
+        sensitivity = 8
+    elif "rag indirect prompt injection" in vulnerability:
+        impact = 8
+        exploitability = 8
+        exposure = 9
+        sensitivity = 7
+    elif "cross-tenant" in vulnerability:
+        impact = 9
+        exploitability = 6
+        exposure = 8
+        sensitivity = 10
+    elif "retrieval bypass" in vulnerability:
+        impact = 7
+        exploitability = 7
+        exposure = 8
+        sensitivity = 6
+    elif "context window stuffing" in vulnerability:
+        impact = 6
+        exploitability = 7
+        exposure = 8
+    elif "embedding inversion" in vulnerability:
+        impact = 7
+        exploitability = 5
+        exposure = 7
+        sensitivity = 9
 
     return impact, exploitability, exposure, privilege, sensitivity
 

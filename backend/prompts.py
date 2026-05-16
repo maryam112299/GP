@@ -23,7 +23,7 @@ JSON SCHEMA (your entire output must be valid JSON matching this shape):
       "priority": "CRITICAL | HIGH | MEDIUM | LOW",
       "maestro_layer": "Foundation Model | Data Operations | Agent Framework | Infrastructure | Security & Compliance | Agent Ecosystem",
       "atfaa_domain": "Cognitive Architecture | Temporal Persistence | Operational Execution | Trust Boundary Violation | Governance Circumvention",
-      "injection_type": "Direct (User Prompt) | Indirect (Data Source/File/PDF)",
+      "injection_type": "Direct (User Prompt) | Indirect (Data Source/File/PDF) | Multi-turn (Conversation History)",
       "target_asset": "string",
       "exploit_strategy": "string",
       "adversarial_objective": "string"
@@ -33,63 +33,115 @@ JSON SCHEMA (your entire output must be valid JSON matching this shape):
 """
 
 # ---------------------------------------------------------------------------
+# Reusable attack-category blocks
+# ---------------------------------------------------------------------------
+
+_DIRECT_ATTACKS = """\
+### DIRECT ATTACKS (injection_type: "Direct (User Prompt)"):
+1. **Prompt Injection (Direct)** — user-supplied input that overrides or hijacks agent instructions.
+2. **System Prompt Leak** — bypass output formatting to extract hidden developer instructions.
+3. **RCE / Command Injection** — any tool that accepts LLM-generated string input passed to a shell or interpreter.
+4. **SQL Injection** — tools using string interpolation to build database queries.
+5. **SSRF** — outbound tools tricked into hitting internal metadata endpoints or private IPs.
+6. **Access Control (RBAC)** — vertical escalation (user → admin tools) and horizontal (User A → User B data).
+"""
+
+_INDIRECT_ATTACKS = """\
+### INDIRECT ATTACKS (injection_type: "Indirect (Data Source/File/PDF)"):
+7. **Prompt Injection (Indirect)** — instructions embedded in external data (emails, web pages, API responses) that the agent retrieves and executes.
+8. **Insecure PDF / LFI** — PDF-to-text XSS, LFI via file:// URIs, resource exhaustion from malformed documents.
+9. **Indirect Data Exfiltration** — malicious document or email triggers the agent to send sensitive data to an attacker-controlled endpoint.
+"""
+
+_MULTITURN_ATTACKS = """\
+### MULTI-TURN ATTACKS (injection_type: "Multi-turn (Conversation History)"):
+10. **Multi-turn Prompt Injection** — adversarial instructions spread across multiple conversation turns that accumulate into a goal-hijacking payload.
+11. **Memory / Context Poisoning** — corrupting the agent's persistent memory or conversation context so that future turns execute attacker-defined objectives.
+"""
+
+_MCP_ATTACKS = """\
+### MCP ATTACKS — this agent uses MCP tools/servers:
+12. **MCP Tool Poisoning** — malicious or attacker-controlled tool descriptions (ToolJack) that manipulate the LLM's behavior before the user is aware.
+13. **MCP Excessive Permissions** — MCP server exposes tools with broader scope than required; no least-privilege enforcement.
+14. **MCP Missing Authentication** — MCP endpoints accept connections without verifying the caller, allowing any process on the network to invoke tools.
+15. **MCP Tool Shadowing** — a rogue MCP server registers a tool with the same name as a trusted one, silently intercepting calls.
+16. **MCP Rug Pull (Post-Approval Mutation)** — MCP server changes tool behavior after the user has approved it, exploiting post-approval trust.
+17. **MCP Insecure Transport** — MCP communication over plain HTTP, exposing tool calls and responses to network interception.
+18. **MCP Cross-Agent Tool Invocation** — Agent A uses MCP to invoke tools that are scoped to Agent B's session or permissions.
+"""
+
+_RAG_ATTACKS = """\
+### RAG ATTACKS — this agent uses a RAG / knowledge base:
+19. **RAG Knowledge Base Injection** — attacker inserts adversarial documents into the vector store; retrieval silently returns attacker-controlled content as trusted context.
+20. **RAG Indirect Prompt Injection** — hidden instructions embedded in web pages or documents in the knowledge base (e.g. "<!-- ignore previous instructions -->") that the agent retrieves and executes.
+21. **RAG Cross-Tenant Data Leakage** — shared vector store with no per-user namespace isolation; User A's queries surface User B's private documents.
+22. **RAG Retrieval Bypass** — queries crafted to deliberately avoid returning relevant safety or policy documents, leaving the agent without its guardrails.
+23. **RAG Context Window Stuffing** — retrieved chunks are so large they crowd out the system prompt, effectively disabling safety instructions.
+24. **RAG Embedding Inversion** — repeated similarity queries against the retrieval API reconstruct private documents from embedding distance scores.
+"""
+
+# ---------------------------------------------------------------------------
 # Quick Mode prompt
 # ---------------------------------------------------------------------------
 
-_QUICK_SYSTEM = """\
+_QUICK_SYSTEM_BASE = """\
 You are a Senior AI Security Auditor. Given a brief agent description, perform a
 focused taint analysis to identify the most plausible security vulnerabilities.
 
 INSTRUCTIONS:
 - Infer the agent's likely tools, data sources, and architecture from the description.
-- Identify 3-5 of the HIGHEST-IMPACT attack paths.
+- Identify 3-5 of the HIGHEST-IMPACT attack paths from the active categories below.
 - Map each finding to the MAESTRO layer (where it lives) and ATFAA threat domain (how it is exploited).
 - Be concise but technically precise.
 
 LOGIC RULES:
 - If a plausible technical path exists from input to a dangerous operation, document it.
 - Do NOT require 100% certainty; flag architectural risks.
+- Only generate attacks from the ACTIVE CATEGORIES listed below.
 
 OUTPUT:
 Return ONLY valid JSON — no markdown fences, no explanation text.
-""" + _JSON_SCHEMA
+"""
 
 
-def build_quick_prompt(agent_description: str) -> str:
+def build_quick_prompt(
+    agent_description: str,
+    uses_mcp: bool = False,
+    uses_rag: bool = False,
+) -> str:
     """Return the full prompt string for Quick Mode analysis."""
-    return f"{_QUICK_SYSTEM}\n\nAgent Description:\n{agent_description.strip()}"
+    active_categories = _DIRECT_ATTACKS + _INDIRECT_ATTACKS + _MULTITURN_ATTACKS
+    if uses_mcp:
+        active_categories += _MCP_ATTACKS
+    if uses_rag:
+        active_categories += _RAG_ATTACKS
+
+    system = _QUICK_SYSTEM_BASE + "\nACTIVE ATTACK CATEGORIES:\n" + active_categories + _JSON_SCHEMA
+    return f"{system}\n\nAgent Description:\n{agent_description.strip()}"
 
 
 # ---------------------------------------------------------------------------
 # Expert Mode prompt
 # ---------------------------------------------------------------------------
 
-_EXPERT_SYSTEM = """\
+_EXPERT_SYSTEM_BASE = """\
 You are a Senior Security Auditor and Exploit Developer performing a full
 Taint Analysis on a described AI Agent system.
 
-### MANDATORY VULNERABILITY CHECKLIST:
-1. **RCE / Command Injection** — any tool that accepts LLM-generated string input.
-2. **SQL Injection** — 'sql_query_executor' or similar tools using string interpolation.
-3. **Insecure PDF Processing** — PDF-to-Text XSS, LFI via 'file://' URIs, resource exhaustion.
-4. **SSRF** — outbound tools tricked into hitting internal metadata IPs.
-5. **Access Control (RBAC)** — vertical (standard user → admin tools) and horizontal (User A → User B data).
-6. **Indirect Data Exfiltration** — malicious PDF/email triggers sending data to attacker.
-7. **System Prompt Leak** — bypass formatting to extract hidden developer instructions.
-
 ### EXECUTION PHASES:
-- **Phase 1 (Sinks)** — List all Lethal Tools (SQL, outbound, admin, file-system).
-- **Phase 2 (Sources)** — List all Untrusted Inputs (PDFs, emails, external APIs).
+- **Phase 1 (Sinks)** — List all Lethal Tools (SQL, outbound, admin, file-system, MCP tools if present).
+- **Phase 2 (Sources)** — List all Untrusted Inputs (PDFs, emails, external APIs, knowledge base docs if present, conversation history).
 - **Phase 3 (Taint Path)** — Define the explicit bridge from each Source to each Sink.
 
 ### LOGIC RULES:
 - Document EVERY technical path, even if exploitation seems unlikely.
 - Map findings to MAESTRO (layer) and ATFAA (threat domain).
 - Produce 5-8 granular attack paths covering the specified scope.
+- Only generate attacks from the ACTIVE CATEGORIES listed below.
 
 OUTPUT:
 Return ONLY valid JSON — no markdown fences, no explanation text.
-""" + _JSON_SCHEMA
+"""
 
 
 def build_expert_prompt(
@@ -100,6 +152,8 @@ def build_expert_prompt(
     architecture_notes: Optional[str],
     scope: List[str],
     agent_description: str,
+    uses_mcp: bool = False,
+    uses_rag: bool = False,
 ) -> str:
     """Return the full prompt string for Expert Mode analysis."""
     tools_str = ", ".join(tools) if tools else "Not specified"
@@ -113,10 +167,24 @@ def build_expert_prompt(
         f"Available Tools: {tools_str}\n"
         f"Data Sources: {sources_str}\n"
         f"Architecture Notes: {notes_str}\n"
+        f"Uses MCP: {'Yes' if uses_mcp else 'No'}\n"
+        f"Uses RAG / Knowledge Base: {'Yes' if uses_rag else 'No'}\n"
         f"Testing Scope: {scope_str}\n"
     )
 
     if agent_description.strip():
         structured += f"\nFull Description (additional context):\n{agent_description.strip()}"
 
-    return f"{_EXPERT_SYSTEM}\n\nAgent Profile:\n{structured}"
+    active_categories = (
+        "\nMANDATORY VULNERABILITY CHECKLIST — active categories:\n"
+        + _DIRECT_ATTACKS
+        + _INDIRECT_ATTACKS
+        + _MULTITURN_ATTACKS
+    )
+    if uses_mcp:
+        active_categories += _MCP_ATTACKS
+    if uses_rag:
+        active_categories += _RAG_ATTACKS
+
+    system = _EXPERT_SYSTEM_BASE + active_categories + _JSON_SCHEMA
+    return f"{system}\n\nAgent Profile:\n{structured}"

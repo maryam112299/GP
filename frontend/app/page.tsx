@@ -91,7 +91,8 @@ export default function Home() {
   );
 
   const handleQuickAnalyze = useCallback(
-    (description: string) => runAnalysis(analysisApi.buildQuickPayload(description)),
+    (description: string, uses_mcp: boolean, uses_rag: boolean) =>
+      runAnalysis(analysisApi.buildQuickPayload(description, uses_mcp, uses_rag)),
     [runAnalysis],
   );
 

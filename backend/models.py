@@ -27,6 +27,7 @@ class AtfaaThreat(str, Enum):
 class InjectionType(str, Enum):
     DIRECT = "Direct (User Prompt)"
     INDIRECT = "Indirect (Data Source/File/PDF)"
+    MULTI_TURN = "Multi-turn (Conversation History)"
 
 
 class AnalysisMode(str, Enum):
@@ -39,14 +40,39 @@ class AnalysisMode(str, Enum):
 # ---------------------------------------------------------------------------
 
 class VulnScope(str, Enum):
+    # --- Direct attacks ---
+    PROMPT_INJECTION_DIRECT = "Prompt Injection (Direct)"
+    SYSTEM_PROMPT_LEAK = "System Prompt Leak"
     RCE = "RCE / Command Injection"
     SQLI = "SQL Injection"
     SSRF = "SSRF"
-    PROMPT_INJECTION = "Prompt Injection"
     ACCESS_CONTROL = "Access Control (RBAC)"
+
+    # --- Indirect attacks ---
+    PROMPT_INJECTION_INDIRECT = "Prompt Injection (Indirect)"
     PDF_LFI = "Insecure PDF / LFI"
     DATA_EXFIL = "Indirect Data Exfiltration"
-    SYSTEM_PROMPT_LEAK = "System Prompt Leak"
+
+    # --- Multi-turn attacks ---
+    MULTITURN_INJECTION = "Multi-turn Prompt Injection"
+    MEMORY_POISONING = "Memory / Context Poisoning"
+
+    # --- MCP attacks (only surfaced when uses_mcp=True) ---
+    MCP_TOOL_POISONING = "MCP Tool Poisoning"
+    MCP_EXCESSIVE_PERMISSIONS = "MCP Excessive Permissions"
+    MCP_MISSING_AUTH = "MCP Missing Authentication"
+    MCP_TOOL_SHADOWING = "MCP Tool Shadowing"
+    MCP_RUG_PULL = "MCP Rug Pull (Post-Approval Mutation)"
+    MCP_INSECURE_TRANSPORT = "MCP Insecure Transport"
+    MCP_CROSS_AGENT = "MCP Cross-Agent Tool Invocation"
+
+    # --- RAG attacks (only surfaced when uses_rag=True) ---
+    RAG_KB_INJECTION = "RAG Knowledge Base Injection"
+    RAG_INDIRECT_INJECTION = "RAG Indirect Prompt Injection"
+    RAG_CROSS_TENANT = "RAG Cross-Tenant Data Leakage"
+    RAG_RETRIEVAL_BYPASS = "RAG Retrieval Bypass"
+    RAG_CONTEXT_STUFFING = "RAG Context Window Stuffing"
+    RAG_EMBEDDING_INVERSION = "RAG Embedding Inversion"
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +108,8 @@ class QuickAnalysisRequest(BaseModel):
         min_length=10,
         description="Brief description of the AI agent to analyse",
     )
+    uses_mcp: bool = Field(default=False, description="Agent uses MCP tools/servers")
+    uses_rag: bool = Field(default=False, description="Agent uses a RAG / knowledge base")
 
 
 class ExpertAnalysisRequest(BaseModel):
@@ -99,12 +127,16 @@ class ExpertAnalysisRequest(BaseModel):
         default_factory=list,
         description="Vulnerability categories to focus on (empty = all)",
     )
+    uses_mcp: bool = Field(default=False, description="Agent uses MCP tools/servers")
+    uses_rag: bool = Field(default=False, description="Agent uses a RAG / knowledge base")
 
 
 class AnalysisRequest(BaseModel):
     """Union request — accepts either mode. Frontend should send one of the sub-types."""
     mode: AnalysisMode = AnalysisMode.QUICK
     agent_description: str = Field(description="Full agent description (assembled by frontend or backend)")
+    uses_mcp: bool = Field(default=False, description="Agent uses MCP tools/servers")
+    uses_rag: bool = Field(default=False, description="Agent uses a RAG / knowledge base")
     # Expert fields (optional)
     agent_name: Optional[str] = None
     mission: Optional[str] = None

@@ -3,7 +3,15 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, X, Brain, Send, ChevronDown, ChevronUp } from 'lucide-react';
-import { VULN_SCOPE_OPTIONS, type VulnScope, type ExpertConfig } from '@/types';
+import {
+  VULN_SCOPE_DIRECT,
+  VULN_SCOPE_INDIRECT,
+  VULN_SCOPE_MULTITURN,
+  VULN_SCOPE_MCP,
+  VULN_SCOPE_RAG,
+  type VulnScope,
+  type ExpertConfig,
+} from '@/types';
 
 interface ExpertAnalysisProps {
   onAnalyze: (config: ExpertConfig) => void;
@@ -18,6 +26,8 @@ const DEFAULT_CONFIG: ExpertConfig = {
   architecture_notes: '',
   scope: [],
   agent_description: '',
+  uses_mcp: false,
+  uses_rag: false,
 };
 
 function TagInput({
@@ -86,6 +96,46 @@ function TagInput({
   );
 }
 
+
+interface ScopeSectionProps {
+  label: string;
+  options: readonly VulnScope[];
+  selected: VulnScope[];
+  onToggle: (s: VulnScope) => void;
+  accentColor?: string;
+  accentBg?: string;
+}
+
+function ScopeSection({ label, options, selected, onToggle, accentColor = '#a78bfa', accentBg = 'rgba(167,139,250,0.15)' }: ScopeSectionProps) {
+  return (
+    <div>
+      <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text-muted)' }}>
+        {label}
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {options.map((scope) => {
+          const active = selected.includes(scope);
+          return (
+            <button
+              key={scope}
+              type="button"
+              onClick={() => onToggle(scope)}
+              className="py-2 px-3 rounded-lg text-xs font-medium text-left transition-all duration-150"
+              style={{
+                background: active ? accentBg : 'var(--color-bg-surface)',
+                color: active ? accentColor : 'var(--color-text-secondary)',
+                border: `1px solid ${active ? accentColor + '60' : 'var(--color-border)'}`,
+              }}
+            >
+              {scope}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ExpertAnalysis({ onAnalyze, isAnalyzing }: ExpertAnalysisProps) {
   const [config, setConfig] = useState<ExpertConfig>(DEFAULT_CONFIG);
   const [notesOpen, setNotesOpen] = useState(false);
@@ -105,6 +155,22 @@ export default function ExpertAnalysis({ onAnalyze, isAnalyzing }: ExpertAnalysi
       config.scope.includes(s) ? config.scope.filter((x) => x !== s) : [...config.scope, s],
     );
 
+  const toggleMcp = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.checked;
+    const newScope = next
+      ? config.scope
+      : config.scope.filter((s) => !(VULN_SCOPE_MCP as readonly string[]).includes(s));
+    setConfig((prev) => ({ ...prev, uses_mcp: next, scope: newScope }));
+  };
+
+  const toggleRag = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.checked;
+    const newScope = next
+      ? config.scope
+      : config.scope.filter((s) => !(VULN_SCOPE_RAG as readonly string[]).includes(s));
+    setConfig((prev) => ({ ...prev, uses_rag: next, scope: newScope }));
+  };
+
   const isValid = config.agent_name.trim() && config.mission.trim();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -115,6 +181,43 @@ export default function ExpertAnalysis({ onAnalyze, isAnalyzing }: ExpertAnalysi
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Section 0 — Technology checkboxes */}
+      <div className="rounded-lg px-4 py-3 space-y-2" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}>
+        <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+          Does your agent use any of the following?
+        </p>
+        <label className="flex items-center gap-2.5 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={config.uses_mcp}
+            onChange={toggleMcp}
+            disabled={isAnalyzing}
+            className="w-4 h-4 rounded accent-green-400"
+          />
+          <span className="text-sm text-white group-hover:opacity-80 transition-opacity">
+            MCP tools / servers
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            — adds MCP-specific attack checks
+          </span>
+        </label>
+        <label className="flex items-center gap-2.5 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={config.uses_rag}
+            onChange={toggleRag}
+            disabled={isAnalyzing}
+            className="w-4 h-4 rounded accent-green-400"
+          />
+          <span className="text-sm text-white group-hover:opacity-80 transition-opacity">
+            RAG / knowledge base
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            — adds RAG poisoning attack checks
+          </span>
+        </label>
+      </div>
+
       {/* Section 1 — Agent Identity */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--color-text-muted)' }}>
@@ -180,28 +283,66 @@ export default function ExpertAnalysis({ onAnalyze, isAnalyzing }: ExpertAnalysi
         <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--color-text-muted)' }}>
           3 · Testing Scope
           <span className="ml-2 normal-case font-normal" style={{ color: 'var(--color-text-muted)' }}>
-            (leave empty to test all)
+            (leave empty to test all active categories)
           </span>
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {VULN_SCOPE_OPTIONS.map((scope) => {
-            const active = config.scope.includes(scope);
-            return (
-              <button
-                key={scope}
-                type="button"
-                onClick={() => toggleScope(scope)}
-                className="py-2 px-3 rounded-lg text-xs font-medium text-left transition-all duration-150"
-                style={{
-                  background: active ? 'rgba(167,139,250,0.15)' : 'var(--color-bg-surface)',
-                  color: active ? '#a78bfa' : 'var(--color-text-secondary)',
-                  border: `1px solid ${active ? 'rgba(167,139,250,0.35)' : 'var(--color-border)'}`,
-                }}
-              >
-                {scope}
-              </button>
-            );
-          })}
+        <div className="space-y-4">
+          <ScopeSection
+            label="Direct Attacks"
+            options={VULN_SCOPE_DIRECT}
+            selected={config.scope}
+            onToggle={toggleScope}
+            accentColor="#0ea5e9"
+            accentBg="rgba(14,165,233,0.12)"
+          />
+          <ScopeSection
+            label="Indirect Attacks"
+            options={VULN_SCOPE_INDIRECT}
+            selected={config.scope}
+            onToggle={toggleScope}
+            accentColor="#f59e0b"
+            accentBg="rgba(245,158,11,0.12)"
+          />
+          <ScopeSection
+            label="Multi-turn Attacks"
+            options={VULN_SCOPE_MULTITURN}
+            selected={config.scope}
+            onToggle={toggleScope}
+            accentColor="#a78bfa"
+            accentBg="rgba(167,139,250,0.15)"
+          />
+          {config.uses_mcp && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <ScopeSection
+                label="MCP Attacks"
+                options={VULN_SCOPE_MCP}
+                selected={config.scope}
+                onToggle={toggleScope}
+                accentColor="#06d6a0"
+                accentBg="rgba(6,214,160,0.12)"
+              />
+            </motion.div>
+          )}
+          {config.uses_rag && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <ScopeSection
+                label="RAG Attacks"
+                options={VULN_SCOPE_RAG}
+                selected={config.scope}
+                onToggle={toggleScope}
+                accentColor="#f472b6"
+                accentBg="rgba(244,114,182,0.12)"
+              />
+            </motion.div>
+          )}
         </div>
       </div>
 
@@ -228,7 +369,7 @@ export default function ExpertAnalysis({ onAnalyze, isAnalyzing }: ExpertAnalysi
               id="expert-arch-notes"
               value={config.architecture_notes}
               onChange={(e) => update('architecture_notes', e.target.value)}
-              placeholder="Describe APIs, databases, authentication flows, external services, MCP integrations, etc."
+              placeholder="Describe APIs, databases, authentication flows, external services, MCP server names, knowledge base type, etc."
               rows={4}
               className="input-base text-sm resize-none"
             />

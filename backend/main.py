@@ -248,9 +248,15 @@ async def analyze_agent(
             architecture_notes=request.architecture_notes or "",
             scope=[s.value for s in (request.scope or [])],
             agent_description=request.agent_description,
+            uses_mcp=request.uses_mcp,
+            uses_rag=request.uses_rag,
         )
     else:
-        prompt = build_quick_prompt(request.agent_description)
+        prompt = build_quick_prompt(
+            request.agent_description,
+            uses_mcp=request.uses_mcp,
+            uses_rag=request.uses_rag,
+        )
 
     started_at = perf_counter()
 

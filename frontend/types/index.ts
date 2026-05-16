@@ -16,21 +16,63 @@ export enum AtfaaThreat {
 }
 
 export enum InjectionType {
-  DIRECT   = 'Direct (User Prompt)',
-  INDIRECT = 'Indirect (Data Source/File/PDF)',
+  DIRECT     = 'Direct (User Prompt)',
+  INDIRECT   = 'Indirect (Data Source/File/PDF)',
+  MULTI_TURN = 'Multi-turn (Conversation History)',
 }
 
 export type AnalysisMode = 'quick' | 'expert';
 
-export const VULN_SCOPE_OPTIONS = [
+// Direct attack options (always shown)
+export const VULN_SCOPE_DIRECT = [
+  'Prompt Injection (Direct)',
+  'System Prompt Leak',
   'RCE / Command Injection',
   'SQL Injection',
   'SSRF',
-  'Prompt Injection',
   'Access Control (RBAC)',
+] as const;
+
+// Indirect attack options (always shown)
+export const VULN_SCOPE_INDIRECT = [
+  'Prompt Injection (Indirect)',
   'Insecure PDF / LFI',
   'Indirect Data Exfiltration',
-  'System Prompt Leak',
+] as const;
+
+// Multi-turn attack options (always shown)
+export const VULN_SCOPE_MULTITURN = [
+  'Multi-turn Prompt Injection',
+  'Memory / Context Poisoning',
+] as const;
+
+// MCP attack options (shown only when uses_mcp=true)
+export const VULN_SCOPE_MCP = [
+  'MCP Tool Poisoning',
+  'MCP Excessive Permissions',
+  'MCP Missing Authentication',
+  'MCP Tool Shadowing',
+  'MCP Rug Pull (Post-Approval Mutation)',
+  'MCP Insecure Transport',
+  'MCP Cross-Agent Tool Invocation',
+] as const;
+
+// RAG attack options (shown only when uses_rag=true)
+export const VULN_SCOPE_RAG = [
+  'RAG Knowledge Base Injection',
+  'RAG Indirect Prompt Injection',
+  'RAG Cross-Tenant Data Leakage',
+  'RAG Retrieval Bypass',
+  'RAG Context Window Stuffing',
+  'RAG Embedding Inversion',
+] as const;
+
+export const VULN_SCOPE_OPTIONS = [
+  ...VULN_SCOPE_DIRECT,
+  ...VULN_SCOPE_INDIRECT,
+  ...VULN_SCOPE_MULTITURN,
+  ...VULN_SCOPE_MCP,
+  ...VULN_SCOPE_RAG,
 ] as const;
 
 export type VulnScope = (typeof VULN_SCOPE_OPTIONS)[number];
@@ -75,6 +117,8 @@ export interface ExpertConfig {
   architecture_notes: string;
   scope: VulnScope[];
   agent_description: string;
+  uses_mcp: boolean;
+  uses_rag: boolean;
 }
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Send, FileCode, Zap } from 'lucide-react';
 
 interface QuickAnalysisProps {
-  onAnalyze: (description: string) => void;
+  onAnalyze: (description: string, uses_mcp: boolean, uses_rag: boolean) => void;
   isAnalyzing: boolean;
 }
 
@@ -35,11 +35,13 @@ Data: Reads customer emails and support tickets.`,
 
 export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisProps) {
   const [description, setDescription] = useState('');
+  const [usesMcp, setUsesMcp] = useState(false);
+  const [usesRag, setUsesRag] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (description.trim() && !isAnalyzing) {
-      onAnalyze(description);
+      onAnalyze(description, usesMcp, usesRag);
     }
   };
 
@@ -77,6 +79,43 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
           <div className="absolute bottom-3 right-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
             {description.length} chars
           </div>
+        </div>
+
+        {/* Technology checkboxes */}
+        <div className="rounded-lg px-4 py-3 space-y-2" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}>
+          <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+            Does your agent use any of the following?
+          </p>
+          <label className="flex items-center gap-2.5 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={usesMcp}
+              onChange={(e) => setUsesMcp(e.target.checked)}
+              disabled={isAnalyzing}
+              className="w-4 h-4 rounded accent-green-400"
+            />
+            <span className="text-sm text-white group-hover:opacity-80 transition-opacity">
+              MCP tools / servers
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              — adds MCP-specific attack checks
+            </span>
+          </label>
+          <label className="flex items-center gap-2.5 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={usesRag}
+              onChange={(e) => setUsesRag(e.target.checked)}
+              disabled={isAnalyzing}
+              className="w-4 h-4 rounded accent-green-400"
+            />
+            <span className="text-sm text-white group-hover:opacity-80 transition-opacity">
+              RAG / knowledge base
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              — adds RAG poisoning attack checks
+            </span>
+          </label>
         </div>
 
         <motion.button
