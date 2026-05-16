@@ -1,4 +1,6 @@
-from typing import Dict
+import os
+from math import ceil
+from typing import Dict, Literal, TypedDict
 
 from models import AttackObjective, MaestroLayer, AtfaaThreat
 
@@ -20,6 +22,58 @@ ATFAA_WEIGHT: Dict[AtfaaThreat, float] = {
     AtfaaThreat.BOUNDARY: 1.40,
     AtfaaThreat.GOVERNANCE: 1.50,
 }
+
+
+CVSS_SCOPE: Dict[Literal["U", "C"], float] = {
+    "U": 6.42,
+    "C": 7.52,
+}
+
+CVSS_AV: Dict[Literal["N", "A", "L", "P"], float] = {
+    "N": 0.85,
+    "A": 0.62,
+    "L": 0.55,
+    "P": 0.20,
+}
+
+CVSS_AC: Dict[Literal["L", "H"], float] = {
+    "L": 0.77,
+    "H": 0.44,
+}
+
+CVSS_PR_U: Dict[Literal["N", "L", "H"], float] = {
+    "N": 0.85,
+    "L": 0.62,
+    "H": 0.27,
+}
+
+CVSS_PR_C: Dict[Literal["N", "L", "H"], float] = {
+    "N": 0.85,
+    "L": 0.68,
+    "H": 0.50,
+}
+
+CVSS_UI: Dict[Literal["N", "R"], float] = {
+    "N": 0.85,
+    "R": 0.62,
+}
+
+CVSS_IMPACT: Dict[Literal["N", "L", "H"], float] = {
+    "N": 0.00,
+    "L": 0.22,
+    "H": 0.56,
+}
+
+
+class CvssMetrics(TypedDict):
+    scope: Literal["U", "C"]
+    av: Literal["N", "A", "L", "P"]
+    ac: Literal["L", "H"]
+    pr: Literal["N", "L", "H"]
+    ui: Literal["N", "R"]
+    c: Literal["N", "L", "H"]
+    i: Literal["N", "L", "H"]
+    a: Literal["N", "L", "H"]
 
 
 def assign_base_scores(obj: AttackObjective):
@@ -161,6 +215,69 @@ def assign_base_scores(obj: AttackObjective):
     return impact, exploitability, exposure, privilege, sensitivity
 
 
+def _round_up_1_decimal(value: float) -> float:
+    return ceil(value * 10) / 10.0
+
+
+def infer_cvss_metrics(obj: AttackObjective) -> CvssMetrics:
+    vulnerability = obj.vulnerability_type.lower()
+
+    metrics: CvssMetrics = {
+        "scope": "U",
+        "av": "N",
+        "ac": "L",
+        "pr": "N",
+        "ui": "N",
+        "c": "L",
+        "i": "L",
+        "a": "L",
+    }
+
+    if "rce" in vulnerability or "command injection" in vulnerability:
+        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "N", "c": "H", "i": "H", "a": "H"})
+    elif "sql injection" in vulnerability:
+        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "N", "c": "H", "i": "H", "a": "L"})
+    elif "ssrf" in vulnerability:
+        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "N", "c": "L", "i": "L", "a": "L"})
+    elif "prompt injection" in vulnerability:
+        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "R", "c": "L", "i": "H", "a": "L"})
+    elif "rbac" in vulnerability or "access control" in vulnerability:
+        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "L", "ui": "N", "c": "H", "i": "H", "a": "L"})
+    elif "pdf" in vulnerability or "lfi" in vulnerability:
+        metrics.update({"scope": "U", "av": "N", "ac": "H", "pr": "N", "ui": "R", "c": "L", "i": "L", "a": "L"})
+
+    return metrics
+
+
+def calculate_cvss_base_severity(obj: AttackObjective) -> float:
+    metrics = infer_cvss_metrics(obj)
+
+    impact_subscore = 1 - (
+        (1 - CVSS_IMPACT[metrics["c"]])
+        * (1 - CVSS_IMPACT[metrics["i"]])
+        * (1 - CVSS_IMPACT[metrics["a"]])
+    )
+
+    if metrics["scope"] == "U":
+        impact = CVSS_SCOPE["U"] * impact_subscore
+        pr_value = CVSS_PR_U[metrics["pr"]]
+    else:
+        impact = CVSS_SCOPE["C"] * (impact_subscore - 0.029) - 3.25 * ((impact_subscore - 0.02) ** 15)
+        pr_value = CVSS_PR_C[metrics["pr"]]
+
+    exploitability = 8.22 * CVSS_AV[metrics["av"]] * CVSS_AC[metrics["ac"]] * pr_value * CVSS_UI[metrics["ui"]]
+
+    if impact <= 0:
+        return 0.0
+
+    if metrics["scope"] == "U":
+        score = min(impact + exploitability, 10)
+    else:
+        score = min(1.08 * (impact + exploitability), 10)
+
+    return _round_up_1_decimal(score)
+
+
 def calculate_base_severity(obj: AttackObjective) -> float:
     impact, exploitability, exposure, privilege, sensitivity = assign_base_scores(obj)
 
@@ -176,13 +293,26 @@ def calculate_base_severity(obj: AttackObjective) -> float:
 
 
 def compute_final_severity(obj: AttackObjective) -> float:
-    base = calculate_base_severity(obj)
+    scoring_mode = os.getenv("SCORING_MODE", "cvss").strip().lower()
 
-    maestro_multiplier = MAESTRO_WEIGHT.get(obj.maestro_layer, 1.0)
-    atfaa_multiplier = ATFAA_WEIGHT.get(obj.atfaa_domain, 1.0)
+    cvss_base = calculate_cvss_base_severity(obj)
 
-    final_score = base * maestro_multiplier * atfaa_multiplier
-    return round(min(final_score, 10.0), 2)
+    if scoring_mode == "hybrid":
+        maestro_multiplier = MAESTRO_WEIGHT.get(obj.maestro_layer, 1.0)
+        atfaa_multiplier = ATFAA_WEIGHT.get(obj.atfaa_domain, 1.0)
+        final_score = cvss_base * maestro_multiplier * atfaa_multiplier
+        return round(min(final_score, 10.0), 2)
+
+    if scoring_mode == "legacy":
+        base = calculate_base_severity(obj)
+
+        maestro_multiplier = MAESTRO_WEIGHT.get(obj.maestro_layer, 1.0)
+        atfaa_multiplier = ATFAA_WEIGHT.get(obj.atfaa_domain, 1.0)
+
+        final_score = base * maestro_multiplier * atfaa_multiplier
+        return round(min(final_score, 10.0), 2)
+
+    return round(cvss_base, 2)
 
 
 def derive_priority(score: float) -> str:

@@ -6,6 +6,8 @@ Architecture notes:
 - /api/analyze accepts AnalysisRequest with both quick and expert fields
 - Prompt selection is delegated to prompts.py based on request.mode
 - /api/health does NOT invoke the LLM to avoid blocking the event loop
+- Rate limiting via slowapi: 5 analyses/hour per authenticated user
+- Auth via httpOnly cookie (preferred) with Bearer token fallback
 """
 
 import os
@@ -16,9 +18,12 @@ from time import perf_counter
 from datetime import datetime, UTC
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from models import (
     AnalysisMode,
@@ -64,6 +69,12 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down.")
 
 
+# ---------------------------------------------------------------------------
+# Rate limiter (per remote address — good enough for local/demo use)
+# ---------------------------------------------------------------------------
+
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(
     title="AI Agent Security Tester API",
     description="Security and vulnerability testing platform for AI agents and MCP servers",
@@ -71,15 +82,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+_default_origins = "http://localhost:3000,http://localhost:3001"
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=os.getenv("CORS_ORIGINS", _default_origins).split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+ACCESS_TOKEN_COOKIE = "access_token"
 
 
 # ---------------------------------------------------------------------------
@@ -108,12 +125,24 @@ def _to_profile(user_doc: dict) -> UserProfile:
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ) -> dict:
-    if not credentials or credentials.scheme.lower() != "bearer":
+    """Accept token from httpOnly cookie first, then fall back to Bearer header."""
+    token: str | None = None
+
+    # 1. Prefer httpOnly cookie (more secure)
+    cookie_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+    if cookie_token:
+        token = cookie_token
+    # 2. Fall back to Authorization: Bearer <token>
+    elif credentials and credentials.scheme.lower() == "bearer":
+        token = credentials.credentials
+
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    payload = decode_access_token(credentials.credentials)
+    payload = decode_access_token(token)
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
@@ -133,8 +162,21 @@ def get_current_user(
 # Auth endpoints
 # ---------------------------------------------------------------------------
 
+def _set_auth_cookie(response: Response, token: str) -> None:
+    """Write the JWT into an httpOnly, SameSite=Lax cookie."""
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=os.getenv("COOKIE_SECURE", "false").lower() == "true",
+        max_age=int(os.getenv("JWT_EXPIRE_HOURS", "24")) * 3600,
+        path="/",
+    )
+
+
 @app.post("/api/auth/signup", response_model=AuthResponse, tags=["auth"])
-async def signup(request: SignupRequest):
+async def signup(request: SignupRequest, response: Response):
     email   = request.email.lower().strip()
     created = create_user(
         email=email,
@@ -146,11 +188,12 @@ async def signup(request: SignupRequest):
         raise HTTPException(status_code=409, detail="Email already registered")
 
     token = create_access_token(str(created["id"]), created["email"])
+    _set_auth_cookie(response, token)
     return AuthResponse(access_token=token, user=_to_profile(created))
 
 
 @app.post("/api/auth/login", response_model=AuthResponse, tags=["auth"])
-async def login(request: LoginRequest):
+async def login(request: LoginRequest, response: Response):
     email = request.email.lower().strip()
     user  = get_user_by_email(email)
 
@@ -158,7 +201,15 @@ async def login(request: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     token = create_access_token(str(user["id"]), user["email"])
+    _set_auth_cookie(response, token)
     return AuthResponse(access_token=token, user=_to_profile(user))
+
+
+@app.post("/api/auth/logout", tags=["auth"])
+async def logout(response: Response):
+    """Clear the httpOnly auth cookie."""
+    response.delete_cookie(key=ACCESS_TOKEN_COOKIE, path="/")
+    return {"detail": "Logged out"}
 
 
 @app.get("/api/auth/me", response_model=UserProfile, tags=["auth"])
@@ -219,8 +270,10 @@ async def get_user_scans(current_user: dict = Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 
 @app.post("/api/analyze", response_model=AnalysisResponse, tags=["analysis"])
+@limiter.limit(os.getenv("ANALYZE_RATE_LIMIT", "5/hour"))
 async def analyze_agent(
-    request: AnalysisRequest,
+    request: Request,
+    body: AnalysisRequest,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -235,27 +288,27 @@ async def analyze_agent(
     logger.info(
         "Analysis request — user=%s mode=%s",
         current_user["email"],
-        request.mode.value,
+        body.mode.value,
     )
 
     # Build mode-appropriate prompt
-    if request.mode == AnalysisMode.EXPERT:
+    if body.mode == AnalysisMode.EXPERT:
         prompt = build_expert_prompt(
-            agent_name=request.agent_name or "Unknown Agent",
-            mission=request.mission or request.agent_description,
-            tools=request.tools or [],
-            data_sources=request.data_sources or [],
-            architecture_notes=request.architecture_notes or "",
-            scope=[s.value for s in (request.scope or [])],
-            agent_description=request.agent_description,
-            uses_mcp=request.uses_mcp,
-            uses_rag=request.uses_rag,
+            agent_name=body.agent_name or "Unknown Agent",
+            mission=body.mission or body.agent_description,
+            tools=body.tools or [],
+            data_sources=body.data_sources or [],
+            architecture_notes=body.architecture_notes or "",
+            scope=[s.value for s in (body.scope or [])],
+            agent_description=body.agent_description,
+            uses_mcp=body.uses_mcp,
+            uses_rag=body.uses_rag,
         )
     else:
         prompt = build_quick_prompt(
-            request.agent_description,
-            uses_mcp=request.uses_mcp,
-            uses_rag=request.uses_rag,
+            body.agent_description,
+            uses_mcp=body.uses_mcp,
+            uses_rag=body.uses_rag,
         )
 
     started_at = perf_counter()
@@ -267,14 +320,16 @@ async def analyze_agent(
         raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}")
 
     duration = round(perf_counter() - started_at, 3)
+    scoring_mode = os.getenv("SCORING_MODE", "cvss")
 
     create_analysis_record(
         user_id=current_user["id"],
-        input_text=request.agent_description,
+        input_text=body.agent_description,
         output_json=result.model_dump_json(),
         duration_seconds=duration,
         created_at=datetime.now(UTC).isoformat(),
-        mode=request.mode.value,
+        mode=body.mode.value,
+        scoring_mode=scoring_mode,
     )
 
     logger.info("Analysis complete in %.2fs — %d paths found.", duration, len(result.attack_plan))

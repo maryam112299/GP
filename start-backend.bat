@@ -8,6 +8,9 @@ echo.
 
 cd /d "%~dp0backend"
 
+:: Set scoring mode (cvss | hybrid | legacy)
+set "SCORING_MODE=cvss"
+
 :: Check if virtual environment exists
 if not exist "venv\" (
     echo Creating virtual environment...

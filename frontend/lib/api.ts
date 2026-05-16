@@ -5,6 +5,16 @@
  * - The base URL is in one place
  * - Auth header injection is handled once
  * - Error normalisation is consistent
+ *
+ * Auth strategy (#10):
+ *   - Login/signup → backend sets an httpOnly cookie automatically
+ *   - Every request uses `credentials: 'include'` so the cookie is sent
+ *   - The Bearer token returned in the JSON body is kept as a fallback
+ *     for clients that cannot use cookies (e.g., native apps / curl)
+ *
+ * 401 handling (#2):
+ *   - `handleResponse` throws 'SESSION_EXPIRED' on any 401 so every
+ *     endpoint (not just /api/analyze) can trigger a clean logout.
  */
 
 import { API_BASE } from './constants';
@@ -21,11 +31,9 @@ import type {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function authHeaders(token: string) {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  } as const;
+/** Headers for JSON requests that DO NOT need auth (cookie is sent automatically). */
+function jsonHeaders() {
+  return { 'Content-Type': 'application/json' } as const;
 }
 
 /** Extract a user-friendly message from a FastAPI error response. */
@@ -57,8 +65,16 @@ export function parseErrorMessage(data: unknown, fallback = 'Request failed'): s
   return fallback;
 }
 
+/**
+ * Shared response handler (#2 fix):
+ * - Throws 'SESSION_EXPIRED' on ANY 401 (not just /api/analyze)
+ * - Normalises all other errors through parseErrorMessage
+ */
 async function handleResponse<T>(res: Response): Promise<T> {
   const data = await res.json().catch(() => null);
+  if (res.status === 401) {
+    throw new Error('SESSION_EXPIRED');
+  }
   if (!res.ok) {
     throw new Error(parseErrorMessage(data));
   }
@@ -73,7 +89,8 @@ export const authApi = {
   async login(email: string, password: string): Promise<AuthResponse> {
     const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: jsonHeaders(),
+      credentials: 'include',          // receive httpOnly cookie (#10)
       body: JSON.stringify({ email, password }),
     });
     return handleResponse<AuthResponse>(res);
@@ -82,17 +99,28 @@ export const authApi = {
   async signup(fullName: string, email: string, password: string): Promise<AuthResponse> {
     const res = await fetch(`${API_BASE}/api/auth/signup`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: jsonHeaders(),
+      credentials: 'include',          // receive httpOnly cookie (#10)
       body: JSON.stringify({ full_name: fullName, email, password }),
     });
     return handleResponse<AuthResponse>(res);
   },
 
-  async me(token: string): Promise<UserProfile> {
+  async me(token?: string): Promise<UserProfile> {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${API_BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
+      credentials: 'include',
     });
     return handleResponse<UserProfile>(res);
+  },
+
+  async logout(): Promise<void> {
+    await fetch(`${API_BASE}/api/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
   },
 };
 
@@ -101,9 +129,12 @@ export const authApi = {
 // ---------------------------------------------------------------------------
 
 export const profileApi = {
-  async get(token: string): Promise<UserProfile> {
+  async get(token?: string): Promise<UserProfile> {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${API_BASE}/api/profile`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
+      credentials: 'include',
     });
     return handleResponse<UserProfile>(res);
   },
@@ -111,7 +142,8 @@ export const profileApi = {
   async update(token: string, data: Partial<UserProfile>): Promise<UserProfile> {
     const res = await fetch(`${API_BASE}/api/profile`, {
       method: 'PUT',
-      headers: authHeaders(token),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      credentials: 'include',
       body: JSON.stringify(data),
     });
     return handleResponse<UserProfile>(res);
@@ -123,9 +155,12 @@ export const profileApi = {
 // ---------------------------------------------------------------------------
 
 export const scansApi = {
-  async getAll(token: string): Promise<ScanHistoryResponse> {
+  async getAll(token?: string): Promise<ScanHistoryResponse> {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${API_BASE}/api/scans`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
+      credentials: 'include',
     });
     return handleResponse<ScanHistoryResponse>(res);
   },
@@ -161,12 +196,11 @@ export const analysisApi = {
   async analyze(token: string, payload: AnalysisPayload): Promise<MissionFile> {
     const res = await fetch(`${API_BASE}/api/analyze`, {
       method: 'POST',
-      headers: authHeaders(token),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      credentials: 'include',   // send httpOnly cookie (#10)
       body: JSON.stringify(payload),
     });
-    if (res.status === 401) {
-      throw new Error('SESSION_EXPIRED');
-    }
+    // handleResponse already handles 401 → SESSION_EXPIRED (#2)
     return handleResponse<MissionFile>(res);
   },
 

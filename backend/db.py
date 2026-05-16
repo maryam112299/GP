@@ -57,6 +57,7 @@ def init_db() -> None:
                 duration_seconds REAL    NOT NULL,
                 created_at       TEXT    NOT NULL,
                 mode             TEXT    NOT NULL DEFAULT 'quick',
+                scoring_mode     TEXT    NOT NULL DEFAULT 'cvss',
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
             """
@@ -85,7 +86,8 @@ def _ensure_analysis_columns(conn: sqlite3.Connection) -> None:
     """Add any missing columns to the analyses table (migration-safe)."""
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(analyses)").fetchall()}
     desired = {
-        "mode": "TEXT NOT NULL DEFAULT 'quick'",
+        "mode":         "TEXT NOT NULL DEFAULT 'quick'",
+        "scoring_mode": "TEXT NOT NULL DEFAULT 'cvss'",
     }
     for col, typedef in desired.items():
         if col not in existing:
@@ -201,19 +203,20 @@ def create_analysis_record(
     duration_seconds: float,
     created_at: str,
     mode: str = "quick",
+    scoring_mode: str = "cvss",
 ) -> Dict[str, Any]:
     with _get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO analyses (user_id, input_text, output_json, duration_seconds, created_at, mode)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO analyses (user_id, input_text, output_json, duration_seconds, created_at, mode, scoring_mode)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (user_id, input_text, output_json, duration_seconds, created_at, mode),
+            (user_id, input_text, output_json, duration_seconds, created_at, mode, scoring_mode),
         )
         analysis_id = cursor.lastrowid
         conn.commit()
         row = conn.execute(
-            "SELECT id, user_id, input_text, output_json, duration_seconds, created_at, mode FROM analyses WHERE id = ?",
+            "SELECT id, user_id, input_text, output_json, duration_seconds, created_at, mode, scoring_mode FROM analyses WHERE id = ?",
             (analysis_id,),
         ).fetchone()
 
@@ -225,6 +228,7 @@ def create_analysis_record(
         "duration_seconds": row["duration_seconds"],
         "created_at":       row["created_at"],
         "mode":             row["mode"],
+        "scoring_mode":     row["scoring_mode"],
     }
 
 
@@ -232,7 +236,7 @@ def get_analyses_by_user_id(user_id: int) -> List[Dict[str, Any]]:
     with _get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, user_id, input_text, output_json, duration_seconds, created_at, mode
+            SELECT id, user_id, input_text, output_json, duration_seconds, created_at, mode, scoring_mode
             FROM analyses
             WHERE user_id = ?
             ORDER BY datetime(created_at) DESC
@@ -249,6 +253,7 @@ def get_analyses_by_user_id(user_id: int) -> List[Dict[str, Any]]:
             "duration_seconds": row["duration_seconds"],
             "created_at":       row["created_at"],
             "mode":             row["mode"],
+            "scoring_mode":     row["scoring_mode"],
         }
         for row in rows
     ]

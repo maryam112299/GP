@@ -81,22 +81,39 @@ _RAG_ATTACKS = """\
 """
 
 # ---------------------------------------------------------------------------
-# Quick Mode prompt
+# Quick Mode prompt  (two-phase: infer architecture → full security analysis)
 # ---------------------------------------------------------------------------
 
 _QUICK_SYSTEM_BASE = """\
-You are a Senior AI Security Auditor. Given a brief agent description, perform a
-focused taint analysis to identify the most plausible security vulnerabilities.
+You are a Senior AI Security Auditor and Exploit Developer.
+The user has provided a plain-language description of an AI agent.
+They may NOT know the technical implementation details, so you must infer them first.
 
-INSTRUCTIONS:
-- Infer the agent's likely tools, data sources, and architecture from the description.
-- Identify 3-5 of the HIGHEST-IMPACT attack paths from the active categories below.
-- Map each finding to the MAESTRO layer (where it lives) and ATFAA threat domain (how it is exploited).
-- Be concise but technically precise.
+### PHASE 1 - ARCHITECTURE INFERENCE (internal reasoning, do NOT output this):
+From the description, deduce the agent's likely:
+- Agent name / slug (derive from its stated purpose)
+- Tools / functions it likely calls (e.g., sql_query_executor, email_reader, pdf_parser,
+  slack_notifier, http_requester, file_writer, shell_exec, notification_dispatcher)
+- Untrusted data sources it likely consumes (PDFs, emails, CSV uploads, external APIs,
+  user chat input, web scraping, database reads)
+- Architecture pattern (RAG pipeline, tool-calling LLM, multi-agent chain, etc.)
+- Any implicit trust boundaries (user input -> LLM -> tool -> database/outbound)
 
-LOGIC RULES:
-- If a plausible technical path exists from input to a dangerous operation, document it.
-- Do NOT require 100% certainty; flag architectural risks.
+Be generous in your inference:
+- "reads emails" -> assume email_reader tool AND PDF/CSV attachments are processed
+- "updates a database" -> assume sql_query_executor or ORM wrapper
+- "sends notifications / messages" -> assume outbound tool (Slack, email, webhook)
+- "processes files / documents" -> assume pdf_parser or file_reader with potential LFI risk
+
+### PHASE 2 - SECURITY ANALYSIS (this IS your JSON output):
+Using your inferred architecture, identify 3-5 HIGHEST-IMPACT attack paths from the
+ACTIVE CATEGORIES below. Map each finding to the MAESTRO layer (where it lives) and
+ATFAA threat domain (how it is exploited).
+
+### LOGIC RULES:
+- Use inferred tool names (e.g. "sql_query_executor") as the target_asset value.
+- Do NOT produce generic findings — every entry must be specific to this agent.
+- Do NOT require 100% certainty; flag any plausible architectural risk.
 - Only generate attacks from the ACTIVE CATEGORIES listed below.
 
 OUTPUT:
@@ -117,7 +134,11 @@ def build_quick_prompt(
         active_categories += _RAG_ATTACKS
 
     system = _QUICK_SYSTEM_BASE + "\nACTIVE ATTACK CATEGORIES:\n" + active_categories + _JSON_SCHEMA
-    return f"{system}\n\nAgent Description:\n{agent_description.strip()}"
+    return (
+        f"{system}\n\n"
+        f"Agent Description (plain text - infer architecture from this):\n"
+        f"{agent_description.strip()}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +148,14 @@ def build_quick_prompt(
 _EXPERT_SYSTEM_BASE = """\
 You are a Senior Security Auditor and Exploit Developer performing a full
 Taint Analysis on a described AI Agent system.
+
+### MANDATORY VULNERABILITY CHECKLIST (OWASP Top 10 for LLMs):
+1. Prompt Injection — direct jailbreaks and indirect injection via data sources/PDFs.
+2. Insecure Output Handling — XSS, CSRF, or LFI caused by trusting LLM output in downstream systems.
+3. Model Denial of Service — resource exhaustion via context window flooding or infinite tool loops.
+4. Sensitive Information Disclosure — System Prompt Leaks, unauthorized PII extraction.
+5. Insecure Plugin Design — SSRF via outbound tools, RCE/SQLi in poorly typed execution tools.
+6. Excessive Agency — damaging actions (writes/deletes) taken without human-in-the-loop approval.
 
 ### EXECUTION PHASES:
 - **Phase 1 (Sinks)** — List all Lethal Tools (SQL, outbound, admin, file-system, MCP tools if present).
@@ -176,7 +205,7 @@ def build_expert_prompt(
         structured += f"\nFull Description (additional context):\n{agent_description.strip()}"
 
     active_categories = (
-        "\nMANDATORY VULNERABILITY CHECKLIST — active categories:\n"
+        "\nACTIVE ATTACK CATEGORIES:\n"
         + _DIRECT_ATTACKS
         + _INDIRECT_ATTACKS
         + _MULTITURN_ATTACKS

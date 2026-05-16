@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Download, Shield, AlertTriangle, Info, Target, Crosshair,
+  Download, FileText, Shield, AlertTriangle, Info, Target, Crosshair,
   ChevronDown, ChevronUp, Clock, Zap, Brain,
 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -14,6 +14,13 @@ interface ResultsDisplayProps {
   results: MissionFile;
   durationSeconds?: number;
   mode?: AnalysisMode;
+}
+
+// ---------------------------------------------------------------------------
+// Strip "LLM01: " / "LLM03: " style prefixes from vulnerability type names
+// ---------------------------------------------------------------------------
+function stripLlmPrefix(text: string): string {
+  return text.replace(/^LLM\d+\s*[:\u2013-]\s*/i, '').trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -95,7 +102,7 @@ function AttackCard({ attack, index }: { attack: AttackObjective; index: number 
               </span>
             )}
           </div>
-          <h4 className="text-sm font-semibold text-white">{attack.vulnerability_type}</h4>
+          <h4 className="text-sm font-semibold text-white">{stripLlmPrefix(attack.vulnerability_type)}</h4>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
             {attack.target_asset}
           </p>
@@ -169,8 +176,146 @@ export default function ResultsDisplay({ results, durationSeconds, mode = 'quick
     URL.revokeObjectURL(url);
   };
 
+  const exportPDF = async () => {
+    const { default: jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentW = pageW - margin * 2;
+    let y = margin;
+
+    const COLORS: Record<string, [number, number, number]> = {
+      CRITICAL: [248, 81, 73],
+      HIGH:     [251, 140, 0],
+      MEDIUM:   [240, 192, 0],
+      LOW:      [88, 166, 255],
+    };
+
+    function checkPage(needed = 10) {
+      if (y + needed > pageH - margin) { doc.addPage(); y = margin; }
+    }
+
+    // Header
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageW, 28, 'F');
+    doc.setFontSize(16); doc.setTextColor(6, 214, 160); doc.setFont('helvetica', 'bold');
+    doc.text('AI Agent Security Analysis Report', margin, 12);
+    doc.setFontSize(8); doc.setTextColor(148, 163, 184); doc.setFont('helvetica', 'normal');
+    doc.text('MAESTRO & ATFAA Frameworks', margin, 19);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageW - margin, 19, { align: 'right' });
+    y = 36;
+
+    // Meta
+    doc.setFontSize(9); doc.setTextColor(100, 116, 139);
+    doc.text('Agent ID:', margin, y);
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
+    doc.text(results.agent_id, margin + 22, y);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+    doc.text('Mode:', margin + 80, y);
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
+    doc.text(mode === 'expert' ? 'Expert' : 'Quick', margin + 93, y);
+    if (typeof durationSeconds === 'number') {
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+      doc.text('Duration:', margin + 120, y);
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
+      doc.text(`${durationSeconds.toFixed(2)}s`, margin + 140, y);
+    }
+    y += 10;
+
+    // Risk summary
+    doc.setFillColor(15, 23, 42); doc.roundedRect(margin, y, contentW, 6, 1, 1, 'F');
+    doc.setFontSize(10); doc.setTextColor(34, 211, 238); doc.setFont('helvetica', 'bold');
+    doc.text('RISK SUMMARY', margin + 3, y + 4.2);
+    y += 10;
+    doc.setFontSize(9); doc.setTextColor(203, 213, 225); doc.setFont('helvetica', 'normal');
+    doc.splitTextToSize(results.risk_summary, contentW).forEach((line: string) => {
+      checkPage(6); doc.text(line, margin, y); y += 5;
+    });
+    y += 4;
+
+    // Severity tally
+    const counts: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+    results.attack_plan.forEach((a) => { if (a.priority in counts) counts[a.priority]++; });
+    checkPage(14);
+    let tx = margin;
+    (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const).forEach((p) => {
+      doc.setFillColor(...COLORS[p]);
+      doc.roundedRect(tx, y, 38, 10, 2, 2, 'F');
+      doc.setTextColor(15, 23, 42); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+      doc.text(`${counts[p]} ${p}`, tx + 19, y + 6.5, { align: 'center' });
+      tx += 42;
+    });
+    y += 16;
+
+    // Attack plan heading
+    doc.setFillColor(15, 23, 42); doc.roundedRect(margin, y, contentW, 6, 1, 1, 'F');
+    doc.setFontSize(10); doc.setTextColor(6, 214, 160); doc.setFont('helvetica', 'bold');
+    doc.text(`ATTACK PLAN  (${results.attack_plan.length} vulnerabilities)`, margin + 3, y + 4.2);
+    y += 12;
+
+    // Vulnerability cards
+    results.attack_plan.forEach((attack, i) => {
+      const title = stripLlmPrefix(attack.vulnerability_type);
+      const c = COLORS[attack.priority] ?? COLORS.LOW;
+      const stratLines: string[] = doc.splitTextToSize(attack.exploit_strategy, contentW - 6);
+      const objLines: string[]   = doc.splitTextToSize(attack.adversarial_objective, contentW - 6);
+      const blockH = 8 + 6 + 6 + stratLines.length * 4.5 + 5 + objLines.length * 4.5 + 8;
+
+      checkPage(blockH);
+      doc.setFillColor(20, 30, 48); doc.roundedRect(margin, y, contentW, blockH, 2, 2, 'F');
+      doc.setFillColor(...c); doc.roundedRect(margin, y, 3, blockH, 1, 1, 'F');
+
+      doc.setFontSize(8); doc.setTextColor(...c); doc.setFont('helvetica', 'bold');
+      doc.text(`#${i + 1}  ${attack.priority}`, margin + 6, y + 5.5);
+      if (typeof attack.severity === 'number') {
+        doc.setTextColor(167, 139, 250);
+        doc.text(`${attack.severity.toFixed(1)} / 10`, pageW - margin - 4, y + 5.5, { align: 'right' });
+      }
+
+      doc.setFontSize(10); doc.setTextColor(241, 245, 249); doc.setFont('helvetica', 'bold');
+      doc.text(title, margin + 6, y + 12);
+      doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal');
+      doc.text(`Target: ${attack.target_asset}`, margin + 6, y + 18);
+
+      const tagY = y + 24;
+      doc.setFontSize(7);
+      doc.setTextColor(34, 211, 238);  doc.text(`MAESTRO: ${attack.maestro_layer}`, margin + 6, tagY);
+      doc.setTextColor(6, 214, 160);   doc.text(`ATFAA: ${attack.atfaa_domain}`, margin + 75, tagY);
+      doc.setTextColor(167, 139, 250); doc.text(attack.injection_type, margin + 140, tagY);
+
+      let innerY = tagY + 7;
+      doc.setFontSize(7.5); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'bold');
+      doc.text('Exploit Strategy', margin + 6, innerY); innerY += 4.5;
+      doc.setTextColor(203, 213, 225); doc.setFont('helvetica', 'normal');
+      stratLines.forEach((line: string) => { doc.text(line, margin + 6, innerY); innerY += 4.5; });
+      innerY += 2;
+      doc.setTextColor(240, 192, 0); doc.setFont('helvetica', 'bold');
+      doc.text('Adversarial Objective', margin + 6, innerY); innerY += 4.5;
+      doc.setTextColor(203, 213, 225); doc.setFont('helvetica', 'normal');
+      objLines.forEach((line: string) => { doc.text(line, margin + 6, innerY); innerY += 4.5; });
+
+      y += blockH + 4;
+    });
+
+    // Footer on every page
+    const totalPages = (doc.internal as { getNumberOfPages: () => number }).getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFontSize(7); doc.setTextColor(71, 85, 105);
+      doc.text(
+        `AI Agent Security Tester · MAESTRO & ATFAA · Page ${p} of ${totalPages}`,
+        pageW / 2, pageH - 6, { align: 'center' },
+      );
+    }
+
+    doc.save(`security_report_${results.agent_id}.pdf`);
+  };
+
   return (
     <motion.div
+      id="results-print-root"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
@@ -203,16 +348,28 @@ export default function ResultsDisplay({ results, durationSeconds, mode = 'quick
             </div>
           </div>
         </div>
-        <motion.button
-          onClick={downloadJSON}
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          className="btn-ghost flex-shrink-0"
-          style={{ color: 'var(--color-accent-green)', borderColor: 'var(--color-border-accent)' }}
-        >
-          <Download className="w-4 h-4" />
-          Export JSON
-        </motion.button>
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap no-print">
+          <motion.button
+            onClick={exportPDF}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            className="btn-ghost"
+            style={{ color: '#a78bfa', borderColor: 'rgba(167,139,250,0.3)' }}
+          >
+            <FileText className="w-4 h-4" />
+            Download Report
+          </motion.button>
+          <motion.button
+            onClick={downloadJSON}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            className="btn-ghost"
+            style={{ color: 'var(--color-accent-green)', borderColor: 'var(--color-border-accent)' }}
+          >
+            <Download className="w-4 h-4" />
+            Export JSON
+          </motion.button>
+        </div>
       </div>
 
       {/* Risk summary */}

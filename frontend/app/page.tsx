@@ -30,12 +30,14 @@ export default function Home() {
   // Restore session on mount
   // -------------------------------------------------------------------------
   useEffect(() => {
+    // Try restoring session via cookie first; fall back to stored token
     const stored = localStorage.getItem('auth_token');
-    if (!stored) { setIsAuthLoading(false); return; }
 
-    setToken(stored);
-    authApi.me(stored)
-      .then(setUser)
+    authApi.me(stored ?? undefined)
+      .then((profile) => {
+        setUser(profile);
+        if (stored) setToken(stored);
+      })
       .catch(() => {
         localStorage.removeItem('auth_token');
         setToken('');
@@ -51,7 +53,8 @@ export default function Home() {
     setUser(profile);
   }, []);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    try { await authApi.logout(); } catch { /* best-effort */ }
     localStorage.removeItem('auth_token');
     setToken('');
     setUser(null);

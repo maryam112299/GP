@@ -54,3 +54,4 @@ yarn-error.log*
 coverage/
 .coverage
 *.cover
+node_modules
