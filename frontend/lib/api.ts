@@ -25,7 +25,14 @@ import type {
   ScanHistoryResponse,
   ExpertConfig,
   AnalysisMode,
+  GeneratePayloadsResponse,
+  PayloadResult,
+  EvaluateResponse,
 } from '@/types';
+
+// ---------------------------------------------------------------------------
+// Report API (PDF blob download)
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -236,5 +243,79 @@ export const analysisApi = {
       uses_mcp: config.uses_mcp,
       uses_rag: config.uses_rag,
     };
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Payload Generation
+// ---------------------------------------------------------------------------
+
+export const payloadApi = {
+  async generate(
+    token: string,
+    agentDescription: string,
+    analysis: MissionFile,
+  ): Promise<GeneratePayloadsResponse> {
+    const res = await fetch(`${API_BASE}/api/generate-payloads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      credentials: 'include',
+      body: JSON.stringify({ agent_description: agentDescription, analysis }),
+    });
+    return handleResponse<GeneratePayloadsResponse>(res);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Attack Simulation / Evaluation
+// ---------------------------------------------------------------------------
+
+export const evaluationApi = {
+  async evaluate(
+    token: string,
+    payloads: PayloadResult[],
+  ): Promise<EvaluateResponse> {
+    const res = await fetch(`${API_BASE}/api/evaluate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      credentials: 'include',
+      body: JSON.stringify({ payloads }),
+    });
+    return handleResponse<EvaluateResponse>(res);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Report Generation
+// ---------------------------------------------------------------------------
+
+export interface ReportPayload {
+  analysis: MissionFile;
+  evaluation: EvaluateResponse;
+  mode: AnalysisMode;
+  agent_description: string;
+  duration_seconds: number;
+}
+
+export const reportApi = {
+  /**
+   * Download a PDF security report.
+   * Returns a Blob (application/pdf) — the caller is responsible for triggering
+   * a browser download via a temporary object URL.
+   */
+  async generate(token: string, payload: ReportPayload): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/api/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+
+    if (res.status === 401) throw new Error('SESSION_EXPIRED');
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(parseErrorMessage(data, 'Report generation failed'));
+    }
+    return res.blob();
   },
 };

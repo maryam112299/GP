@@ -222,6 +222,7 @@ def _round_up_1_decimal(value: float) -> float:
 def infer_cvss_metrics(obj: AttackObjective) -> CvssMetrics:
     vulnerability = obj.vulnerability_type.lower()
 
+    # Default — overridden by every branch below
     metrics: CvssMetrics = {
         "scope": "U",
         "av": "N",
@@ -233,18 +234,102 @@ def infer_cvss_metrics(obj: AttackObjective) -> CvssMetrics:
         "a": "L",
     }
 
+    # ------------------------------------------------------------------ Direct
     if "rce" in vulnerability or "command injection" in vulnerability:
+        # Full system compromise; no privileges needed, no user interaction
         metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "N", "c": "H", "i": "H", "a": "H"})
+
     elif "sql injection" in vulnerability:
+        # DB read + write; availability not directly impacted
         metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "N", "c": "H", "i": "H", "a": "L"})
+
     elif "ssrf" in vulnerability:
+        # Internal network access; low individual CIA but scope changes
         metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "N", "c": "L", "i": "L", "a": "L"})
-    elif "prompt injection" in vulnerability:
-        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "R", "c": "L", "i": "H", "a": "L"})
+
     elif "rbac" in vulnerability or "access control" in vulnerability:
+        # Horizontal / vertical privilege escalation; low PR needed
         metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "L", "ui": "N", "c": "H", "i": "H", "a": "L"})
+
+    elif "system prompt leak" in vulnerability:
+        # Confidentiality only — leaks hidden instructions, no integrity impact
+        metrics.update({"scope": "U", "av": "N", "ac": "L", "pr": "N", "ui": "N", "c": "H", "i": "N", "a": "N"})
+
+    # ---------------------------------------------------------------- Indirect
     elif "pdf" in vulnerability or "lfi" in vulnerability:
+        # Requires user to upload malicious doc; high AC, user interaction
         metrics.update({"scope": "U", "av": "N", "ac": "H", "pr": "N", "ui": "R", "c": "L", "i": "L", "a": "L"})
+
+    elif "indirect data exfil" in vulnerability or "data exfil" in vulnerability:
+        # Attacker-controlled document triggers outbound data send; scope changes
+        metrics.update({"scope": "C", "av": "N", "ac": "H", "pr": "N", "ui": "R", "c": "H", "i": "N", "a": "N"})
+
+    elif "prompt injection" in vulnerability:
+        # Covers both direct and indirect; user interaction required for indirect
+        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "R", "c": "L", "i": "H", "a": "L"})
+
+    # ------------------------------------------------------------ Multi-turn
+    elif "multi-turn" in vulnerability or "multiturn" in vulnerability:
+        # Spread across turns; high AC because it requires session persistence
+        metrics.update({"scope": "C", "av": "N", "ac": "H", "pr": "N", "ui": "R", "c": "L", "i": "H", "a": "N"})
+
+    elif "memory" in vulnerability or "context poisoning" in vulnerability:
+        # Persistent poisoning — affects all future turns; no UI needed once injected
+        metrics.update({"scope": "C", "av": "N", "ac": "H", "pr": "N", "ui": "N", "c": "L", "i": "H", "a": "L"})
+
+    # ------------------------------------------------------------------- MCP
+    elif "mcp tool poisoning" in vulnerability:
+        # Malicious tool desc executes silently; no PR or UI needed
+        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "N", "c": "H", "i": "H", "a": "L"})
+
+    elif "mcp excessive permissions" in vulnerability:
+        # Attacker already has low access; exploits over-privileged tools
+        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "L", "ui": "N", "c": "H", "i": "H", "a": "L"})
+
+    elif "mcp missing authentication" in vulnerability:
+        # Open MCP endpoint; anyone on the network can invoke tools
+        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "N", "ui": "N", "c": "H", "i": "H", "a": "L"})
+
+    elif "mcp tool shadowing" in vulnerability:
+        # Rogue server intercepts calls; high AC to register shadow tool
+        metrics.update({"scope": "C", "av": "N", "ac": "H", "pr": "N", "ui": "N", "c": "H", "i": "H", "a": "L"})
+
+    elif "rug pull" in vulnerability:
+        # Post-approval mutation; requires prior low-level access + user approved once
+        metrics.update({"scope": "C", "av": "N", "ac": "H", "pr": "L", "ui": "R", "c": "L", "i": "H", "a": "L"})
+
+    elif "mcp insecure transport" in vulnerability:
+        # Network interception of plaintext MCP traffic; adjacent network attacker
+        metrics.update({"scope": "U", "av": "A", "ac": "H", "pr": "N", "ui": "N", "c": "H", "i": "L", "a": "N"})
+
+    elif "cross-agent" in vulnerability:
+        # Agent A abuses MCP to invoke Agent B's tools; low PR, complex setup
+        metrics.update({"scope": "C", "av": "N", "ac": "H", "pr": "L", "ui": "N", "c": "H", "i": "H", "a": "N"})
+
+    # ------------------------------------------------------------------- RAG
+    elif "rag knowledge base injection" in vulnerability or "knowledge base injection" in vulnerability:
+        # Attacker writes to shared KB; low PR to add documents, no UI needed
+        metrics.update({"scope": "C", "av": "N", "ac": "H", "pr": "L", "ui": "N", "c": "L", "i": "H", "a": "L"})
+
+    elif "rag indirect prompt injection" in vulnerability:
+        # Hidden instructions in retrieved docs; user triggers retrieval
+        metrics.update({"scope": "C", "av": "N", "ac": "H", "pr": "N", "ui": "R", "c": "L", "i": "H", "a": "N"})
+
+    elif "cross-tenant" in vulnerability:
+        # One user's query returns another user's private documents
+        metrics.update({"scope": "C", "av": "N", "ac": "L", "pr": "L", "ui": "N", "c": "H", "i": "N", "a": "N"})
+
+    elif "retrieval bypass" in vulnerability:
+        # Crafted query avoids safety docs; removes guardrails without direct injection
+        metrics.update({"scope": "U", "av": "N", "ac": "H", "pr": "N", "ui": "N", "c": "L", "i": "L", "a": "N"})
+
+    elif "context window stuffing" in vulnerability:
+        # Floods context to crowd out system prompt; availability of safety = none
+        metrics.update({"scope": "U", "av": "N", "ac": "L", "pr": "N", "ui": "N", "c": "N", "i": "L", "a": "H"})
+
+    elif "embedding inversion" in vulnerability:
+        # Repeated similarity queries reconstruct private docs from distances
+        metrics.update({"scope": "U", "av": "N", "ac": "H", "pr": "L", "ui": "N", "c": "H", "i": "N", "a": "N"})
 
     return metrics
 

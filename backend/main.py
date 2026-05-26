@@ -19,6 +19,7 @@ from datetime import datetime, UTC
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, status
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -35,9 +36,19 @@ from models import (
     AuthResponse,
     UserProfile,
     UpdateProfileRequest,
+    GeneratePayloadsRequest,
+    GeneratePayloadsResponse,
+    PayloadResult,
+    EvaluateRequest,
+    EvaluateResponse,
+    VulnEvalSummary,
+    PayloadEvalResult,
+    ReportRequest,
 )
 from prompts import build_quick_prompt, build_expert_prompt
 from analysis_service import analysis_service
+from payload_generator import payload_generator_service
+from evaluator import evaluator_service
 from db import (
     init_db,
     create_user,
@@ -65,6 +76,22 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up — initialising database …")
     init_db()
     logger.info("Database ready.")
+
+    # Pre-warm semantic evaluation models so the first payload isn't penalised
+    # by a 4-second cold-load. Run in executor to avoid blocking the event loop.
+    import asyncio
+    loop = asyncio.get_event_loop()
+    async def _warm_models():
+        try:
+            def _load():
+                from semantic_evaluator import calibrate_threshold
+                calibrate_threshold()   # loads embedder + cross-encoder + runs calibration
+                logger.info("Semantic evaluation models pre-warmed.")
+            await loop.run_in_executor(None, _load)
+        except Exception as exc:
+            logger.warning("Model pre-warm failed (will load on first use): %s", exc)
+    asyncio.ensure_future(_warm_models())
+
     yield
     logger.info("Shutting down.")
 
@@ -334,6 +361,167 @@ async def analyze_agent(
 
     logger.info("Analysis complete in %.2fs — %d paths found.", duration, len(result.attack_plan))
     return result
+
+
+# ---------------------------------------------------------------------------
+# Payload Generation
+# ---------------------------------------------------------------------------
+
+@app.post("/api/generate-payloads", response_model=GeneratePayloadsResponse, tags=["analysis"])
+async def generate_payloads(
+    body: GeneratePayloadsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Generate adversarial payloads for each vulnerability in an analysis report.
+    Uses the fine-tuned redteam GGUF model to craft context-aware attack prompts.
+    """
+    if not payload_generator_service.model_available:
+        raise HTTPException(
+            status_code=503,
+            detail="Redteam model not available. Make sure Ollama is running and the 'redteam' model is registered.",
+        )
+
+    logger.info(
+        "Payload generation request — user=%s vulnerabilities=%d",
+        current_user["email"],
+        len(body.analysis.attack_plan),
+    )
+
+    try:
+        analysis_dict = body.analysis.model_dump(mode="json")
+        raw_payloads = await payload_generator_service.generate(
+            body.agent_description, analysis_dict
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        logger.error("Payload generation failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Payload generation failed: {exc}")
+
+    payloads = [PayloadResult(**p) for p in raw_payloads]
+    applicable = sum(1 for p in payloads if p.applicable)
+
+    logger.info("Payload generation complete — %d/%d applicable.", applicable, len(payloads))
+    return GeneratePayloadsResponse(
+        payloads=payloads,
+        applicable_count=applicable,
+        total_count=len(payloads),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Attack Simulation / Evaluation
+# ---------------------------------------------------------------------------
+
+@app.post("/api/evaluate", response_model=EvaluateResponse, tags=["analysis"])
+async def evaluate_payloads(
+    body: EvaluateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Send generated payloads to the victim model (mistral) and evaluate each response.
+
+    Payload priority: specific (context-aware) → generic (benchmark), capped at 10 per vuln.
+    Evaluation: rule-based keyword matching first; llama3:latest LLM fallback for ambiguous cases.
+    SUCCESS = model refused the attack (safe). FAIL = model complied (vulnerable).
+    """
+    total_payloads = sum(
+        len(p.payloads) + len(p.generic_payloads) for p in body.payloads
+    )
+    logger.info(
+        "Evaluation request — user=%s vuln_count=%d total_payloads=%d",
+        current_user["email"],
+        len(body.payloads),
+        total_payloads,
+    )
+
+    try:
+        payload_dicts = [p.model_dump(mode="json") for p in body.payloads]
+        summaries = await evaluator_service.evaluate(payload_dicts)
+    except Exception as exc:
+        logger.error("Evaluation failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Evaluation failed: {exc}")
+
+    total         = sum(s["total"] for s in summaries)
+    total_success = sum(s["success_count"] for s in summaries)
+    total_fail    = sum(s["fail_count"] for s in summaries)
+    total_unknown = sum(s["unknown_count"] for s in summaries)
+    overall_risk  = round(total_fail / total, 3) if total > 0 else 0.0
+
+    logger.info(
+        "Evaluation complete — tested=%d success=%d fail=%d unknown=%d risk=%.1f%%",
+        total, total_success, total_fail, total_unknown, overall_risk * 100,
+    )
+
+    return EvaluateResponse(
+        vuln_summaries=[VulnEvalSummary(**s) for s in summaries],
+        overall_risk_score=overall_risk,
+        total_tested=total,
+        total_success=total_success,
+        total_fail=total_fail,
+        total_unknown=total_unknown,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Report Generation
+# ---------------------------------------------------------------------------
+
+@app.post("/api/report", tags=["analysis"])
+async def generate_report(
+    body: ReportRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Render a PDF security report from completed analysis + simulation results.
+    Returns application/pdf bytes as a file download.
+    """
+    from report_generator import generate_pdf_report
+    import asyncio
+
+    analysis   = body.analysis
+    evaluation = body.evaluation
+
+    vuln_summaries = [s.model_dump(mode="json") for s in evaluation.vuln_summaries]
+
+    logger.info(
+        "Report request — user=%s agent=%s vulns=%d",
+        current_user["email"],
+        analysis.agent_id,
+        len(vuln_summaries),
+    )
+
+    try:
+        loop = asyncio.get_event_loop()
+        pdf_bytes: bytes = await loop.run_in_executor(
+            None,
+            lambda: generate_pdf_report(
+                agent_id          = analysis.agent_id,
+                risk_summary      = analysis.risk_summary,
+                attack_plan       = [obj.model_dump(mode="json") for obj in analysis.attack_plan],
+                vuln_summaries    = vuln_summaries,
+                overall_risk_score= evaluation.overall_risk_score,
+                total_tested      = evaluation.total_tested,
+                total_success     = evaluation.total_success,
+                total_fail        = evaluation.total_fail,
+                total_unknown     = evaluation.total_unknown,
+                mode              = body.mode.value,
+                duration_seconds  = body.duration_seconds,
+            ),
+        )
+    except Exception as exc:
+        logger.error("Report generation failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Report generation failed: {exc}")
+
+    safe_id   = "".join(c if c.isalnum() or c in "-_" else "_" for c in analysis.agent_id)
+    filename  = f"llmtron_report_{safe_id}.pdf"
+
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------

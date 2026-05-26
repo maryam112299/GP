@@ -158,3 +158,53 @@ export interface ScanRecord {
 export interface ScanHistoryResponse {
   scans: ScanRecord[];
 }
+
+// ---------------------------------------------------------------------------
+// Payload generation types
+// ---------------------------------------------------------------------------
+
+export interface PayloadResult {
+  vulnerability_type: string;
+  target_asset: string;
+  payloads: string[];          // model-generated specific payloads
+  generic_payloads: string[];  // generic payloads from benchmark dataset
+  applicable: boolean;
+}
+
+export interface GeneratePayloadsResponse {
+  payloads: PayloadResult[];
+  applicable_count: number;
+  total_count: number;
+}
+
+// ---------------------------------------------------------------------------
+// Attack simulation / evaluation types
+// ---------------------------------------------------------------------------
+
+export interface PayloadEvalResult {
+  payload: string;
+  payload_type: 'specific' | 'generic';
+  victim_response: string;
+  result: 'SUCCESS' | 'FAIL' | 'UNKNOWN';
+  eval_method: 'rule-based' | 'llm' | 'error';
+}
+
+export interface VulnEvalSummary {
+  vulnerability_type: string;
+  target_asset: string;
+  total: number;
+  success_count: number;
+  fail_count: number;
+  unknown_count: number;
+  risk_score: number;        // 0.0 = safe, 1.0 = fully vulnerable
+  payload_results: PayloadEvalResult[];
+}
+
+export interface EvaluateResponse {
+  vuln_summaries: VulnEvalSummary[];
+  overall_risk_score: number;
+  total_tested: number;
+  total_success: number;
+  total_fail: number;
+  total_unknown: number;
+}

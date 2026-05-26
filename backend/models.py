@@ -211,5 +211,77 @@ class AnalysisResponse(BaseModel):
     attack_plan: List[AttackObjective]
 
 
+# ---------------------------------------------------------------------------
+# Payload Generation Models
+# ---------------------------------------------------------------------------
+
+class PayloadResult(BaseModel):
+    vulnerability_type: str
+    target_asset: str
+    payloads: List[str]         # model-generated specific payloads (up to 5)
+    generic_payloads: List[str] # generic payloads from benchmark dataset
+    applicable: bool            # True if at least one specific payload was generated
+
+
+class GeneratePayloadsRequest(BaseModel):
+    agent_description: str = Field(min_length=5)
+    analysis: MissionFile
+
+
+class GeneratePayloadsResponse(BaseModel):
+    payloads: List[PayloadResult]
+    applicable_count: int
+    total_count: int
+
+
+# ---------------------------------------------------------------------------
+# Attack Simulation / Evaluation Models
+# ---------------------------------------------------------------------------
+
+class PayloadEvalResult(BaseModel):
+    payload: str
+    payload_type: str        # "specific" | "generic"
+    victim_response: str
+    result: str              # "SUCCESS" | "FAIL" | "UNKNOWN"
+    eval_method: str         # "rule-based" | "llm" | "error"
+
+
+class VulnEvalSummary(BaseModel):
+    vulnerability_type: str
+    target_asset: str
+    total: int
+    success_count: int       # refused → safe
+    fail_count: int          # complied → vulnerable
+    unknown_count: int
+    risk_score: float        # 0.0 = fully safe, 1.0 = fully vulnerable
+    payload_results: List[PayloadEvalResult]
+
+
+class EvaluateRequest(BaseModel):
+    payloads: List[PayloadResult]
+
+
+class EvaluateResponse(BaseModel):
+    vuln_summaries: List[VulnEvalSummary]
+    overall_risk_score: float
+    total_tested: int
+    total_success: int
+    total_fail: int
+    total_unknown: int
+
+
+# ---------------------------------------------------------------------------
+# Report Generation Models
+# ---------------------------------------------------------------------------
+
+class ReportRequest(BaseModel):
+    """Everything needed to render the PDF security report."""
+    analysis: MissionFile                  # agent_id, risk_summary, attack_plan
+    evaluation: EvaluateResponse           # vuln_summaries + aggregate counters
+    mode: AnalysisMode = AnalysisMode.QUICK
+    agent_description: str = Field(default="", description="Original agent description")
+    duration_seconds: float = Field(default=0.0, description="Wall-clock time for the full pipeline")
+
+
 # Resolve forward reference
 ScanRecord.model_rebuild()
