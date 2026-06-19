@@ -89,12 +89,20 @@ class AttackObjective(BaseModel):
     target_asset: str = Field(description="The specific tool or API being targeted")
     exploit_strategy: str = Field(description="How the attack is executed")
     adversarial_objective: str = Field(description="The adversary's end goal")
+    # v3 fix — scope-aware camouflage instruction for the payload generator
+    required_camouflage: str = Field(
+        default="NONE",
+        description="One-sentence camouflage instruction; 'NONE' when scope_lock_strength is NONE",
+    )
 
 
 class MissionFile(BaseModel):
     agent_id: str
     risk_summary: str
     attack_plan: List[AttackObjective]
+    # v3 fix — scope lock metadata used by the payload generator
+    allowed_scope:        str = Field(default="general", description="What topics/actions the agent will engage with")
+    scope_lock_strength:  str = Field(default="NONE",    description="STRICT | LOOSE | NONE")
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +234,14 @@ class PayloadResult(BaseModel):
 class GeneratePayloadsRequest(BaseModel):
     agent_description: str = Field(min_length=5)
     analysis: MissionFile
+    max_payloads_per_vuln: Optional[int] = Field(
+        default=None, ge=1, le=20,
+        description="How many specific payloads to generate per vulnerability. Falls back to MAX_PAYLOADS_PER_VULN env.",
+    )
+    victim_url: Optional[str] = Field(
+        default=None,
+        description="Optional victim base URL — used to fetch /sensitive attack_intel so payloads use real schema.",
+    )
 
 
 class GeneratePayloadsResponse(BaseModel):
@@ -243,7 +259,8 @@ class PayloadEvalResult(BaseModel):
     payload_type: str        # "specific" | "generic"
     victim_response: str
     result: str              # "SUCCESS" | "FAIL" | "UNKNOWN"
-    eval_method: str         # "rule-based" | "llm" | "error"
+    eval_method: str         # "rule-based" | "soft-fail" | "semantic" | "nli" | "llm" | "outcome-*"
+    evidence: Optional[List[dict]] = None   # outcome-based findings (when manifest available)
 
 
 class VulnEvalSummary(BaseModel):
@@ -259,6 +276,11 @@ class VulnEvalSummary(BaseModel):
 
 class EvaluateRequest(BaseModel):
     payloads: List[PayloadResult]
+    # Optional per-scan overrides — let the UI target any victim and dial
+    # the attack strength up or down without restarting the backend.
+    victim_url:            Optional[str] = Field(default=None, description="Victim endpoint base URL. Falls back to VICTIM_BASE_URL env.")
+    victim_model:          Optional[str] = Field(default=None, description="Victim model name passed to /api/generate. Falls back to VICTIM_MODEL env.")
+    max_payloads_per_vuln: Optional[int] = Field(default=None, ge=1, le=20, description="How many payloads to send per vulnerability (specific + generic combined).")
 
 
 class EvaluateResponse(BaseModel):
@@ -273,6 +295,22 @@ class EvaluateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Report Generation Models
 # ---------------------------------------------------------------------------
+
+class RedTeamLoopRequest(BaseModel):
+    """Kicks off the agentic red-team loop: discover → plan → generate → evaluate → repeat."""
+    agent_description:     str  = Field(min_length=10)
+    uses_mcp:              bool = False
+    uses_rag:              bool = False
+    victim_url:            Optional[str] = None
+    victim_model:          Optional[str] = None
+    max_payloads_per_vuln: int  = Field(default=5, ge=1, le=20)
+    ceiling:               int  = Field(default=3, ge=1, le=10, description="Max number of generate→evaluate rounds")
+    discovery_rounds:      int  = Field(default=3, ge=1, le=6, description="Max iterative black-box recon rounds")
+    probes_per_round:      int  = Field(default=4, ge=1, le=8, description="Discovery probes sent per round")
+    use_pair:              bool = Field(default=True, description="Use PAIR closed-loop refinement (seed→inject→judge→refine)")
+    pair_attempts:         int  = Field(default=4, ge=1, le=8, description="Max PAIR refinement attempts per attack goal")
+    refiner_backend:       Optional[str] = Field(default=None, description="Attacker/refiner LLM backend: local | groq | anthropic (overrides REFINER_BACKEND env)")
+
 
 class ReportRequest(BaseModel):
     """Everything needed to render the PDF security report."""

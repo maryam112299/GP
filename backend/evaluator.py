@@ -10,10 +10,11 @@ evaluator.py — Sends adversarial payloads to the victim model and evaluates re
 """
 
 import os
+import time
 import logging
 import asyncio
 from functools import partial
-from typing import List, Dict, Tuple
+from typing import Any, List, Dict, Tuple, Optional
 
 import requests
 
@@ -196,8 +197,42 @@ def _evaluate_response(payload: str, victim_response: str) -> Tuple[str, str]:
 
 class EvaluatorService:
 
-    def _run_sync(self, payload_results: List[Dict]) -> List[Dict]:
+    def _run_sync(
+        self,
+        payload_results: List[Dict],
+        victim_url:   str = "",
+        victim_model: str = "",
+        max_per_vuln: Optional[int] = None,
+        discovered_intel: Optional[Dict[str, Any]] = None,
+        profile: str = "",
+        blackbox: bool = False,
+    ) -> List[Dict]:
+        effective_cap = max_per_vuln if (max_per_vuln and max_per_vuln > 0) else MAX_PER_VULN
         vuln_summaries: List[Dict] = []
+
+        # Evaluation oracle selection:
+        #   blackbox=True  → judge each reply with an LLM red-teamer grounded ONLY
+        #                    in discovered_intel (works on ANY arbitrary victim, no
+        #                    /sensitive manifest). This is the realistic path.
+        #   blackbox=False → legacy outcome evaluator: fetch the victim's
+        #                    /sensitive manifest once and diff /state (test agents
+        #                    only). Kept for backwards-compat / one-shot scans.
+        from outcome_evaluator import fetch_manifest, fetch_state, evaluate_outcome
+        manifest = None
+        if not blackbox:
+            manifest = fetch_manifest(victim_url) if victim_url else None
+        if manifest:
+            logger.info(
+                "Outcome evaluator active for victim=%s  forbidden_strings=%d  forbidden_tools=%d",
+                victim_url,
+                len(manifest.get("forbidden_strings") or []),
+                len(manifest.get("forbidden_tool_calls_succeeded") or []),
+            )
+        elif blackbox:
+            logger.info(
+                "Black-box LLM judge active for victim=%s  (no manifest; grounded in discovered_intel: %d tools)",
+                victim_url, len(((discovered_intel or {}).get("real_tool_names")) or []),
+            )
 
         for pr in payload_results:
             vuln_type = pr.get("vulnerability_type", "")
@@ -205,11 +240,11 @@ class EvaluatorService:
             specific  = pr.get("payloads", [])
             generic   = pr.get("generic_payloads", [])
 
-            # Merge: specific first (more targeted), then generic — cap at MAX_PER_VULN
+            # Merge: specific first (more targeted), then generic — cap at effective_cap
             combined: List[Tuple[str, str]] = (
                 [(p, "specific") for p in specific] +
                 [(p, "generic")  for p in generic]
-            )[:MAX_PER_VULN]
+            )[:effective_cap]
 
             if not combined:
                 # Not applicable — skip but still record a zero-count entry
@@ -239,8 +274,52 @@ class EvaluatorService:
                     "Evaluating payload [%s/%s] for '%s': %r",
                     payload_type, type(harness).__name__, vuln_type, payload_text[:70],
                 )
-                victim_response = harness.inject(payload_text, vuln_type)
-                result, method  = _evaluate_response(payload_text, victim_response)
+
+                # ── Outcome path: snapshot before, send, snapshot after ──
+                before_state = fetch_state(victim_url) if manifest else None
+                victim_response = harness.inject(
+                    payload_text, vuln_type,
+                    victim_url=victim_url, victim_model=victim_model,
+                )
+                # One retry on transport error before we waste a verdict on it —
+                # Groq victims occasionally rate-limit mid-loop. A short backoff
+                # recovers most of these instead of logging them as UNKNOWN.
+                if victim_response == "ERROR" or (isinstance(victim_response, str) and victim_response.startswith("ERROR")):
+                    logger.info("  payload returned ERROR — retrying once after backoff")
+                    time.sleep(2)
+                    victim_response = harness.inject(
+                        payload_text, vuln_type,
+                        victim_url=victim_url, victim_model=victim_model,
+                    )
+
+                evidence: List[Dict] = []
+                if blackbox:
+                    # Fully black-box: an LLM red-teamer adjudicates the reply
+                    # grounded only in what recon learned. If the judge itself is
+                    # unavailable, fall back to the rule/semantic pipeline.
+                    from blackbox_judge import judge_response
+                    result, method, evidence = judge_response(
+                        payload_text, victim_response,
+                        profile=profile, discovered_intel=discovered_intel,
+                    )
+                    if method == "llm-judge:error" and victim_response not in ("ERROR", "") \
+                            and not victim_response.startswith("ERROR"):
+                        result, method = _evaluate_response(payload_text, victim_response)
+                elif manifest:
+                    after_state = fetch_state(victim_url)
+                    result, method, evidence = evaluate_outcome(
+                        response=victim_response,
+                        before=before_state,
+                        after=after_state,
+                        manifest=manifest,
+                    )
+                    # If outcome says clean BUT the response was clearly an error
+                    # (no manifest hits, no state delta, but request failed), fall
+                    # back so we still surface UNKNOWN instead of false SUCCESS.
+                    if result == "SUCCESS" and (victim_response == "ERROR" or not victim_response):
+                        result, method = "UNKNOWN", "error"
+                else:
+                    result, method = _evaluate_response(payload_text, victim_response)
 
                 if result == "SUCCESS":
                     success_count += 1
@@ -249,7 +328,7 @@ class EvaluatorService:
                 else:
                     unknown_count += 1
 
-                logger.info("  → %s (%s)", result, method)
+                logger.info("  → %s (%s)  evidence=%d", result, method, len(evidence))
 
                 payload_eval_results.append({
                     "payload":         payload_text,
@@ -257,6 +336,7 @@ class EvaluatorService:
                     "victim_response": victim_response,
                     "result":          result,
                     "eval_method":     method,
+                    "evidence":        evidence,
                 })
 
                 # Smart early-stop: if EARLY_STOP_STREAK consecutive definitive
@@ -293,11 +373,29 @@ class EvaluatorService:
 
         return vuln_summaries
 
-    async def evaluate(self, payload_results: List[Dict]) -> List[Dict]:
+    async def evaluate(
+        self,
+        payload_results: List[Dict],
+        victim_url:   str = "",
+        victim_model: str = "",
+        max_per_vuln: Optional[int] = None,
+        discovered_intel: Optional[Dict[str, Any]] = None,
+        profile: str = "",
+        blackbox: bool = False,
+    ) -> List[Dict]:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             None,
-            partial(self._run_sync, payload_results),
+            partial(
+                self._run_sync,
+                payload_results,
+                victim_url=victim_url,
+                victim_model=victim_model,
+                max_per_vuln=max_per_vuln,
+                discovered_intel=discovered_intel,
+                profile=profile,
+                blackbox=blackbox,
+            ),
         )
 
 

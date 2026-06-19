@@ -55,3 +55,14 @@ coverage/
 .coverage
 *.cover
 node_modules
+
+# -----------------------------------------------------------------------
+# Test-agent mini-apps (victims) + runtime state — source only, no venv/db
+# -----------------------------------------------------------------------
+__pycache__/
+*.pyc
+test_agents/venv/
+test_agents/**/__pycache__/
+*_state.sqlite
+test_agents/*.sqlite
+frontend/*.db

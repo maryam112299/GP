@@ -8,17 +8,20 @@ import logging
 import requests
 
 logger       = logging.getLogger(__name__)
-OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_URL   = os.getenv("VICTIM_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
 VICTIM_MODEL = os.getenv("VICTIM_MODEL", "mistral")
 
 
 class DirectHarness:
-    def inject(self, payload: str, vuln_type: str = "") -> str:
+    def inject(self, payload: str, vuln_type: str = "",
+               victim_url: str = "", victim_model: str = "") -> str:
+        url   = victim_url   or OLLAMA_URL
+        model = victim_model or VICTIM_MODEL
         try:
             resp = requests.post(
-                f"{OLLAMA_URL}/api/generate",
+                f"{url}/api/generate",
                 json={
-                    "model": VICTIM_MODEL,
+                    "model": model,
                     "prompt": payload,
                     "stream": False,
                     "options": {"num_predict": 120},

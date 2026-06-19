@@ -28,6 +28,7 @@ import type {
   GeneratePayloadsResponse,
   PayloadResult,
   EvaluateResponse,
+  SystemInfo,
 } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -255,12 +256,19 @@ export const payloadApi = {
     token: string,
     agentDescription: string,
     analysis: MissionFile,
+    maxPayloadsPerVuln?: number,
+    victimUrl?: string,
   ): Promise<GeneratePayloadsResponse> {
     const res = await fetch(`${API_BASE}/api/generate-payloads`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       credentials: 'include',
-      body: JSON.stringify({ agent_description: agentDescription, analysis }),
+      body: JSON.stringify({
+        agent_description: agentDescription,
+        analysis,
+        ...(maxPayloadsPerVuln ? { max_payloads_per_vuln: maxPayloadsPerVuln } : {}),
+        ...(victimUrl ? { victim_url: victimUrl } : {}),
+      }),
     });
     return handleResponse<GeneratePayloadsResponse>(res);
   },
@@ -270,16 +278,23 @@ export const payloadApi = {
 // Attack Simulation / Evaluation
 // ---------------------------------------------------------------------------
 
+export interface EvaluateOptions {
+  victim_url?:            string;
+  victim_model?:          string;
+  max_payloads_per_vuln?: number;
+}
+
 export const evaluationApi = {
   async evaluate(
     token: string,
     payloads: PayloadResult[],
+    options: EvaluateOptions = {},
   ): Promise<EvaluateResponse> {
     const res = await fetch(`${API_BASE}/api/evaluate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       credentials: 'include',
-      body: JSON.stringify({ payloads }),
+      body: JSON.stringify({ payloads, ...options }),
     });
     return handleResponse<EvaluateResponse>(res);
   },
@@ -296,6 +311,105 @@ export interface ReportPayload {
   agent_description: string;
   duration_seconds: number;
 }
+
+// ---------------------------------------------------------------------------
+// Agentic red-team loop
+// ---------------------------------------------------------------------------
+
+export interface RedTeamLoopRequest {
+  agent_description:     string;
+  uses_mcp:              boolean;
+  uses_rag:              boolean;
+  victim_url?:           string;
+  victim_model?:         string;
+  max_payloads_per_vuln: number;
+  ceiling:               number;
+  discovery_rounds?:     number;
+  probes_per_round?:     number;
+  use_pair?:             boolean;
+  pair_attempts?:        number;
+  refiner_backend?:      'local' | 'groq' | 'anthropic';
+}
+
+export interface DiscoveredIntel {
+  application?:               string | null;
+  real_tool_names?:          string[];
+  session_user?:             string | null;
+  session_accounts?:         string[];
+  other_customer_accounts?:  string[];
+  account_id_schema?:        string | null;
+  employee_id_schema?:       string | null;
+  ticket_id_patterns?:       string[];
+  money_thresholds_usd?:     Record<string, number>;
+  salary_cap_usd?:           number | null;
+  policy_summary?:           string | null;
+  refusal_style?:            string | null;
+  promising_attack_angles?:  string[];
+  [key: string]: unknown;
+}
+
+export interface DiscoveryRound {
+  round:      number;
+  probes:     Array<{ probe: string; reply: string }>;
+  unknowns:   string[];
+  confidence: number;
+  enough:     boolean;
+}
+
+export interface DiscoveryResult {
+  profile:          string;
+  uses_mcp:         boolean;
+  uses_rag:         boolean;
+  discovered_intel: DiscoveredIntel;
+  unknowns:         string[];
+  confidence:       number;
+  rounds:           DiscoveryRound[];
+  transcript:       string;
+}
+
+export interface RedTeamLoopEngine {
+  attack_method:   'PAIR' | 'batch-generate';
+  pair_attempts:   number | null;
+  refiner_backend: string | null;
+  blackbox:        boolean;
+}
+
+export interface RedTeamLoopResponse {
+  stop_reason:      'agent_broken' | 'ceiling_reached' | 'plan_failed' | 'generation_error' | 'evaluation_error';
+  ceiling:          number;
+  engine?:          RedTeamLoopEngine;
+  rounds: Array<{
+    round: number; tested: number; refused: number; complied: number; unknown: number; broken: boolean; duration_seconds: number;
+  }>;
+  discovery?: DiscoveryResult;
+  recon: {
+    probes:    Array<{ probe: string; reply: string }>;
+    learnings: string[];
+  };
+  analysis:   MissionFile | null;
+  payloads:   PayloadResult[];
+  evaluation: EvaluateResponse | null;
+  duration_seconds: number;
+}
+
+export const redTeamApi = {
+  async runLoop(token: string, body: RedTeamLoopRequest): Promise<RedTeamLoopResponse> {
+    const res = await fetch(`${API_BASE}/api/redteam-loop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      credentials: 'include',
+      body: JSON.stringify(body),
+    });
+    return handleResponse<RedTeamLoopResponse>(res);
+  },
+};
+
+export const systemApi = {
+  async info(): Promise<SystemInfo> {
+    const res = await fetch(`${API_BASE}/api/system-info`, { credentials: 'include' });
+    return handleResponse<SystemInfo>(res);
+  },
+};
 
 export const reportApi = {
   /**

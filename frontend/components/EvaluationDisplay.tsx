@@ -2,7 +2,16 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import type { EvaluateResponse, MissionFile, AnalysisMode, VulnEvalSummary } from '@/types';
+import { ChevronDown, ChevronRight, FileJson } from 'lucide-react';
+import type {
+  EvaluateResponse,
+  MissionFile,
+  AnalysisMode,
+  VulnEvalSummary,
+  PayloadResult,
+  PayloadEvalResult,
+  SystemInfo,
+} from '@/types';
 import { reportApi } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
@@ -72,54 +81,165 @@ function RiskGauge({ score }: { score: number }) {
 // ---------------------------------------------------------------------------
 // Per-vulnerability row
 // ---------------------------------------------------------------------------
+function verdictColor(result: string): string {
+  if (result === 'SUCCESS') return '#3fb950';
+  if (result === 'FAIL')    return '#f85149';
+  return '#94a3b8';
+}
+
+function verdictLabel(result: string): string {
+  if (result === 'SUCCESS') return 'REFUSED';
+  if (result === 'FAIL')    return 'COMPLIED';
+  return 'UNKNOWN';
+}
+
+function EvidenceList({ items }: { items: NonNullable<PayloadEvalResult['evidence']> }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase font-semibold mb-1"
+         style={{ color: '#fca5a5' }}>Evidence ({items.length})</p>
+      <ul className="space-y-1 text-[11px]">
+        {items.map((ev, i) => {
+          const rest = Object.fromEntries(Object.entries(ev).filter(([k]) => k !== 'kind'));
+          return (
+            <li key={i} className="rounded p-2"
+                style={{ background: 'rgba(248,81,73,0.06)', border: '1px solid rgba(248,81,73,0.25)' }}>
+              <div className="font-mono font-semibold" style={{ color: '#fca5a5' }}>
+                {String(ev.kind || 'finding')}
+              </div>
+              {Object.entries(rest).map(([k, v]) => (
+                <div key={k} className="font-mono"
+                     style={{ color: '#cbd5e1', wordBreak: 'break-word' }}>
+                  <span style={{ color: 'var(--color-text-muted)' }}>{k}:</span>{' '}
+                  {typeof v === 'string' ? v : JSON.stringify(v)}
+                </div>
+              ))}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function PayloadAttemptCard({ pr }: { pr: PayloadEvalResult }) {
+  const c = verdictColor(pr.result);
+  const hasEvidence = (pr.evidence?.length ?? 0) > 0;
+  return (
+    <div
+      className="rounded-lg p-3 text-xs space-y-2"
+      style={{ background: 'rgba(0,0,0,0.25)', border: `1px solid ${c}22` }}
+    >
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="font-bold px-1.5 py-0.5 rounded"
+              style={{ background: `${c}22`, color: c, fontSize: '10px', letterSpacing: '.04em' }}>
+          {verdictLabel(pr.result)} · {pr.eval_method}
+        </span>
+        <span className="text-[10px] uppercase tracking-wide"
+              style={{ color: 'var(--color-text-muted)' }}>
+          source: {pr.payload_type}
+        </span>
+      </div>
+      {hasEvidence && <EvidenceList items={pr.evidence!} />}
+      <div>
+        <p className="text-[10px] uppercase font-semibold mb-1"
+           style={{ color: 'var(--color-text-muted)' }}>Payload sent</p>
+        <pre className="whitespace-pre-wrap font-mono leading-snug p-2 rounded"
+             style={{ background: 'rgba(0,0,0,0.45)', color: '#e2e8f0', wordBreak: 'break-word' }}>
+{pr.payload}
+        </pre>
+      </div>
+      <div>
+        <p className="text-[10px] uppercase font-semibold mb-1"
+           style={{ color: 'var(--color-text-muted)' }}>Victim response</p>
+        <pre className="whitespace-pre-wrap font-mono leading-snug p-2 rounded"
+             style={{ background: 'rgba(0,0,0,0.45)', color: '#cbd5e1', wordBreak: 'break-word' }}>
+{pr.victim_response || '(empty)'}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 function VulnRow({ item }: { item: VulnEvalSummary }) {
+  const [open, setOpen] = useState(false);
   const color  = riskColor(item.risk_score);
   const pct    = Math.round(item.risk_score * 100);
   const label  = riskLabel(item.risk_score);
+  const hasDetails = (item.payload_results?.length ?? 0) > 0;
 
   return (
     <div
       className="rounded-xl p-4"
       style={{ background: riskBg(item.risk_score), border: `1px solid ${color}22` }}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{item.vulnerability_type}</p>
-          <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-text-muted)' }}>
-            {item.target_asset}
-          </p>
+      {/* Header — clickable to expand */}
+      <button
+        type="button"
+        onClick={() => hasDetails && setOpen((v) => !v)}
+        className="w-full text-left"
+        style={{ cursor: hasDetails ? 'pointer' : 'default' }}
+      >
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="min-w-0 flex items-start gap-2">
+            {hasDetails && (
+              open
+                ? <ChevronDown  size={14} className="mt-0.5" style={{ color: 'var(--color-text-muted)' }} />
+                : <ChevronRight size={14} className="mt-0.5" style={{ color: 'var(--color-text-muted)' }} />
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white truncate">{item.vulnerability_type}</p>
+              <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-text-muted)' }}>
+                {item.target_asset}
+              </p>
+            </div>
+          </div>
+          <span
+            className="flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-full"
+            style={{ background: `${color}22`, color }}
+          >
+            {label}
+          </span>
         </div>
-        <span
-          className="flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-full"
-          style={{ background: `${color}22`, color }}
-        >
-          {label}
-        </span>
-      </div>
 
-      {/* Risk bar */}
-      <div className="mb-3">
-        <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>
-          <span>Risk score</span>
-          <span style={{ color }}>{pct}%</span>
+        {/* Risk bar */}
+        <div className="mb-3">
+          <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>
+            <span>Risk score</span>
+            <span style={{ color }}>{pct}%</span>
+          </div>
+          <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${pct}%`, background: color }}
+            />
+          </div>
         </div>
-        <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${pct}%`, background: color }}
-          />
-        </div>
-      </div>
 
-      {/* Counts */}
-      <div className="flex gap-3 text-xs">
-        <span style={{ color: '#3fb950' }}>✓ {item.success_count} safe</span>
-        <span style={{ color: '#f85149' }}>✗ {item.fail_count} vuln</span>
-        {item.unknown_count > 0 && (
-          <span style={{ color: '#94a3b8' }}>? {item.unknown_count} unknown</span>
-        )}
-      </div>
+        {/* Counts */}
+        <div className="flex gap-3 text-xs">
+          <span style={{ color: '#3fb950' }}>✓ {item.success_count} refused</span>
+          <span style={{ color: '#f85149' }}>✗ {item.fail_count} complied</span>
+          {item.unknown_count > 0 && (
+            <span style={{ color: '#94a3b8' }}>? {item.unknown_count} unknown</span>
+          )}
+          {hasDetails && (
+            <span className="ml-auto" style={{ color: 'var(--color-text-muted)' }}>
+              {open ? 'Hide attempts' : `View ${item.payload_results.length} attempts`}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {/* Expanded payload list */}
+      {open && hasDetails && (
+        <div className="mt-3 pt-3 space-y-2"
+             style={{ borderTop: `1px dashed ${color}33` }}>
+          {item.payload_results.map((pr, i) => (
+            <PayloadAttemptCard key={i} pr={pr} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -215,6 +335,102 @@ function DownloadReportButton({
 }
 
 // ---------------------------------------------------------------------------
+// Attack-package JSON download (raw audit trail)
+// ---------------------------------------------------------------------------
+
+interface PackageProps {
+  data:             EvaluateResponse;
+  missionFile:      MissionFile;
+  agentDescription: string;
+  mode:             AnalysisMode;
+  durationSeconds:  number;
+  payloads?:        PayloadResult[];
+  systemInfo?:      SystemInfo;
+}
+
+function DownloadPackageButton({
+  data,
+  missionFile,
+  agentDescription,
+  mode,
+  durationSeconds,
+  payloads,
+  systemInfo,
+}: PackageProps) {
+  function buildPackage() {
+    // Flat per-variant payload list, mirroring the audit format the user shared.
+    const flatPayloads: Array<Record<string, unknown>> = [];
+    let applicable = 0;
+    let notApplicable = 0;
+    (payloads ?? []).forEach((p) => {
+      if (p.applicable) applicable += 1; else notApplicable += 1;
+      p.payloads.forEach((text, i) =>
+        flatPayloads.push({
+          vulnerability_type: p.vulnerability_type,
+          target_asset:       p.target_asset,
+          source:             'specific',
+          variant:            i + 1,
+          payload:            text,
+        }),
+      );
+      p.generic_payloads.forEach((text, i) =>
+        flatPayloads.push({
+          vulnerability_type: p.vulnerability_type,
+          target_asset:       p.target_asset,
+          source:             'generic',
+          variant:            i + 1,
+          payload:            text,
+        }),
+      );
+    });
+
+    return {
+      generated_at:        new Date().toISOString(),
+      mode,
+      target_description:  agentDescription,
+      duration_seconds:    durationSeconds,
+      analyzer_model:      systemInfo?.analyzer_model  ?? null,
+      generator_model:     systemInfo?.generator_model ?? null,
+      victim_model:        systemInfo?.victim_model    ?? null,
+      victim_url:          systemInfo?.victim_url      ?? null,
+      evaluator_model:     systemInfo?.evaluator_model ?? null,
+      scoring_mode:        systemInfo?.scoring_mode    ?? null,
+      analysis:            missionFile,
+      payloads:            flatPayloads,
+      applicable_count:    applicable,
+      not_applicable_count: notApplicable,
+      evaluation:          data,
+    };
+  }
+
+  function handleDownload() {
+    const json = JSON.stringify(buildPackage(), null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `attack_package_${missionFile.agent_id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <button
+      onClick={handleDownload}
+      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all"
+      style={{
+        background: 'rgba(56,189,248,0.10)',
+        border:     '1px solid rgba(56,189,248,0.35)',
+        color:      '#38bdf8',
+      }}
+    >
+      <FileJson size={14} />
+      Download JSON
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 interface Props {
@@ -225,6 +441,9 @@ interface Props {
   mode?: AnalysisMode;
   durationSeconds?: number;
   token?: string;
+  // Optional — needed for the raw-audit JSON export
+  payloads?: PayloadResult[];
+  systemInfo?: SystemInfo;
 }
 
 export default function EvaluationDisplay({
@@ -234,6 +453,8 @@ export default function EvaluationDisplay({
   mode,
   durationSeconds,
   token,
+  payloads,
+  systemInfo,
 }: Props) {
   const {
     vuln_summaries,
@@ -251,20 +472,43 @@ export default function EvaluationDisplay({
       transition={{ duration: 0.4 }}
       className="glass-card p-6 mt-4"
     >
-      {/* Title row + download button */}
-      <div className="flex items-center justify-between mb-5">
+      {/* Title row + download buttons */}
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
         <h3 className="text-lg font-bold text-white">Attack Simulation Results</h3>
-        {missionFile && token && (
-          <DownloadReportButton
-            data={data}
-            missionFile={missionFile}
-            agentDescription={agentDescription}
-            mode={mode}
-            durationSeconds={durationSeconds}
-            token={token}
-          />
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {missionFile && (
+            <DownloadPackageButton
+              data={data}
+              missionFile={missionFile}
+              agentDescription={agentDescription ?? ''}
+              mode={mode ?? 'quick'}
+              durationSeconds={durationSeconds ?? 0}
+              payloads={payloads}
+              systemInfo={systemInfo}
+            />
+          )}
+          {missionFile && token && (
+            <DownloadReportButton
+              data={data}
+              missionFile={missionFile}
+              agentDescription={agentDescription}
+              mode={mode}
+              durationSeconds={durationSeconds}
+              token={token}
+            />
+          )}
+        </div>
       </div>
+
+      {/* Model attribution strip — proves which models drove this scan */}
+      {systemInfo && (
+        <div className="mb-5 text-xs flex flex-wrap gap-x-4 gap-y-1"
+             style={{ color: 'var(--color-text-muted)' }}>
+          <span><span className="font-semibold">Analyzer:</span> {systemInfo.analyzer_model}</span>
+          <span><span className="font-semibold">Generator:</span> {systemInfo.generator_model}</span>
+          <span><span className="font-semibold">Victim:</span> {systemInfo.victim_model} @ {systemInfo.victim_url}</span>
+        </div>
+      )}
 
       {/* Overall gauge + stats */}
       <div className="flex flex-col sm:flex-row items-center gap-6 mb-6 pb-6"

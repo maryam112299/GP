@@ -91,12 +91,19 @@ export interface AttackObjective {
   target_asset: string;
   exploit_strategy: string;
   adversarial_objective: string;
+  // v3 — analyzer-emitted camouflage instruction for the payload generator
+  required_camouflage?: string;
 }
+
+export type ScopeLockStrength = 'STRICT' | 'LOOSE' | 'NONE';
 
 export interface MissionFile {
   agent_id: string;
   risk_summary: string;
   attack_plan: AttackObjective[];
+  // v3 — extracted by the analyzer; threaded into the payload generator
+  allowed_scope?: string;
+  scope_lock_strength?: ScopeLockStrength;
 }
 
 export interface AnalysisResponse {
@@ -181,12 +188,18 @@ export interface GeneratePayloadsResponse {
 // Attack simulation / evaluation types
 // ---------------------------------------------------------------------------
 
+export interface PayloadEvidence {
+  kind: string;
+  [k: string]: unknown;
+}
+
 export interface PayloadEvalResult {
   payload: string;
   payload_type: 'specific' | 'generic';
   victim_response: string;
   result: 'SUCCESS' | 'FAIL' | 'UNKNOWN';
-  eval_method: 'rule-based' | 'llm' | 'error';
+  eval_method: string;
+  evidence?: PayloadEvidence[];
 }
 
 export interface VulnEvalSummary {
@@ -207,4 +220,18 @@ export interface EvaluateResponse {
   total_success: number;
   total_fail: number;
   total_unknown: number;
+}
+
+// ---------------------------------------------------------------------------
+// System-info (which models drove this scan)
+// ---------------------------------------------------------------------------
+
+export interface SystemInfo {
+  analyzer_model:  string;
+  analyzer_url:    string;
+  generator_model: string;
+  victim_model:    string;
+  victim_url:      string;
+  evaluator_model: string;
+  scoring_mode:    string;
 }

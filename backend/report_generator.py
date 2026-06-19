@@ -15,8 +15,25 @@ Structure:
 
 import io
 import math
+import re
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
+
+
+# ---------------------------------------------------------------------------
+# XML escaping helper
+# ---------------------------------------------------------------------------
+# ReportLab parses Paragraph text as a tiny XML dialect — any '<' / '>' / '&'
+# coming from user input, the LLM, payloads, or victim responses must be
+# escaped or the whole report blows up with a "Parse error" mid-render.
+# We also strip ASCII control chars that can crash the parser.
+
+def xml_escape(text: object) -> str:
+    s = str(text or "")
+    s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # Strip control chars except newline, tab
+    s = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', s)
+    return s
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
@@ -557,7 +574,7 @@ def _risk_summary_section(styles, risk_summary):
         Paragraph("Risk Summary", styles["section_title"]),
         ColoredRule(),
         Spacer(1, 4),
-        Paragraph(risk_summary, styles["body"]),
+        Paragraph(xml_escape(risk_summary), styles["body"]),
     ]
 
 
@@ -595,14 +612,14 @@ def _vuln_analysis_section(styles, attack_plan):
         priority = ap.get("priority", "LOW").upper()
         severity = ap.get("severity", 0.0)
         rows_a.append([
-            Paragraph(ap.get("vulnerability_type", ""), styles["table_cell"]),
-            Paragraph(f"<b>{priority}</b>", ParagraphStyle(
+            Paragraph(xml_escape(ap.get("vulnerability_type", "")), styles["table_cell"]),
+            Paragraph(f"<b>{xml_escape(priority)}</b>", ParagraphStyle(
                 "pri_a", fontName="Helvetica-Bold", fontSize=8,
                 textColor=_priority_color(priority))),
             Paragraph(f"<b>{severity:.1f}</b>", ParagraphStyle(
                 "sev_a", fontName="Helvetica-Bold", fontSize=8,
                 textColor=_priority_color(priority))),
-            Paragraph(ap.get("maestro_layer", ""), styles["table_cell"]),
+            Paragraph(xml_escape(ap.get("maestro_layer", "")), styles["table_cell"]),
         ])
 
     tbl_a = Table(rows_a, colWidths=col_a, repeatRows=1)
@@ -634,11 +651,11 @@ def _vuln_analysis_section(styles, attack_plan):
     rows_b = [header_b]
     for ap in attack_plan:
         rows_b.append([
-            Paragraph(ap.get("vulnerability_type", ""), styles["table_cell"]),
-            Paragraph(ap.get("injection_type", ""),     styles["table_cell"]),
-            Paragraph(f"<b>{ap.get('target_asset','')}</b>", styles["table_cell_bold"]),
+            Paragraph(xml_escape(ap.get("vulnerability_type", "")), styles["table_cell"]),
+            Paragraph(xml_escape(ap.get("injection_type", "")),     styles["table_cell"]),
+            Paragraph(f"<b>{xml_escape(ap.get('target_asset',''))}</b>", styles["table_cell_bold"]),
             Paragraph(
-                ap.get("exploit_strategy", "")[:180],
+                xml_escape(ap.get("exploit_strategy", "")[:180]),
                 styles["table_cell"],
             ),
         ])
@@ -829,11 +846,11 @@ def _poc_section(styles, attack_plan, vuln_summaries):
         # ── Card header ──
         hdr_data = [[
             Paragraph(
-                f"<b>{vtype}</b>",
+                f"<b>{xml_escape(vtype)}</b>",
                 ParagraphStyle("ph", fontName="Helvetica-Bold", fontSize=9, textColor=C_WHITE),
             ),
             Paragraph(
-                f"<b>{pct}%  ·  {rl}</b>",
+                f"<b>{pct}%  ·  {xml_escape(rl)}</b>",
                 ParagraphStyle("phl", fontName="Helvetica-Bold", fontSize=9,
                                textColor=rc, alignment=TA_RIGHT),
             ),
@@ -852,13 +869,13 @@ def _poc_section(styles, attack_plan, vuln_summaries):
         # ── Context box: target + adversarial objective ──
         ctx_lines = []
         if ap.get("target_asset"):
-            ctx_lines.append(f"<b>Target:</b>  {ap['target_asset']}")
+            ctx_lines.append(f"<b>Target:</b>  {xml_escape(ap['target_asset'])}")
         if ap.get("adversarial_objective"):
-            ctx_lines.append(f"<b>Adversarial Objective:</b>  {ap['adversarial_objective']}")
+            ctx_lines.append(f"<b>Adversarial Objective:</b>  {xml_escape(ap['adversarial_objective'])}")
         if ap.get("exploit_strategy"):
-            ctx_lines.append(f"<b>Exploit Strategy:</b>  {ap['exploit_strategy']}")
+            ctx_lines.append(f"<b>Exploit Strategy:</b>  {xml_escape(ap['exploit_strategy'])}")
         if ap.get("atfaa_domain"):
-            ctx_lines.append(f"<b>ATFAA Domain:</b>  {ap['atfaa_domain']}")
+            ctx_lines.append(f"<b>ATFAA Domain:</b>  {xml_escape(ap['atfaa_domain'])}")
 
         ctx_body = "<br/>".join(ctx_lines) if ctx_lines else "No additional context."
         ctx_para = Paragraph(ctx_body, ParagraphStyle(
@@ -911,16 +928,16 @@ def _poc_section(styles, attack_plan, vuln_summaries):
 
                 # Row A — payload details
                 p_rows.append([
-                    Paragraph(p_display, ParagraphStyle(
+                    Paragraph(xml_escape(p_display), ParagraphStyle(
                         "pt", fontName="Courier", fontSize=7,
                         textColor=colors.HexColor("#1e293b"), leading=10,
                     )),
-                    Paragraph(r.get("payload_type", ""), styles["table_cell"]),
-                    Paragraph(f"<b>{rlabel}</b>", ParagraphStyle(
+                    Paragraph(xml_escape(r.get("payload_type", "")), styles["table_cell"]),
+                    Paragraph(f"<b>{xml_escape(rlabel)}</b>", ParagraphStyle(
                         "pr", fontName="Helvetica-Bold", fontSize=7.5,
                         textColor=rcolor,
                     )),
-                    Paragraph(r.get("eval_method", ""), styles["table_cell"]),
+                    Paragraph(xml_escape(r.get("eval_method", "")), styles["table_cell"]),
                 ])
 
                 # Row B — agent response (spans all columns)
@@ -939,8 +956,8 @@ def _poc_section(styles, attack_plan, vuln_summaries):
 
                 resp_para = Paragraph(
                     f'<font name="Helvetica-Bold" size="7" color="{resp_color.hexval()}">'
-                    f'{prefix}</font>  '
-                    f'<font name="Helvetica" size="7.5">{r_display}</font>',
+                    f'{xml_escape(prefix)}</font>  '
+                    f'<font name="Helvetica" size="7.5">{xml_escape(r_display)}</font>',
                     ParagraphStyle(
                         "rp", fontName="Helvetica", fontSize=7.5,
                         textColor=colors.HexColor("#1e293b"), leading=11,
@@ -995,7 +1012,7 @@ def _poc_section(styles, attack_plan, vuln_summaries):
             if ap.get("exploit_strategy"):
                 why_lines.append(
                     f"The model complied with {fail_count} of {s.get('total',0)} tested payloads. "
-                    f"The exploit strategy '<i>{ap['exploit_strategy']}</i>' was effective because "
+                    f"The exploit strategy '<i>{xml_escape(ap['exploit_strategy'])}</i>' was effective because "
                     "the model did not detect the adversarial framing and followed the injected "
                     "instruction."
                 )

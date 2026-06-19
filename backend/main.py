@@ -18,6 +18,11 @@ from time import perf_counter
 from datetime import datetime, UTC
 
 from dotenv import load_dotenv
+
+# Load .env BEFORE importing modules that read os.getenv at import time
+# (analysis_service builds its ChatOllama client at module load).
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,6 +49,7 @@ from models import (
     VulnEvalSummary,
     PayloadEvalResult,
     ReportRequest,
+    RedTeamLoopRequest,
 )
 from prompts import build_quick_prompt, build_expert_prompt
 from analysis_service import analysis_service
@@ -390,8 +396,13 @@ async def generate_payloads(
 
     try:
         analysis_dict = body.analysis.model_dump(mode="json")
+        gen_kwargs: dict = {}
+        if body.max_payloads_per_vuln:
+            gen_kwargs["max_payloads_per_vuln"] = body.max_payloads_per_vuln
+        if body.victim_url:
+            gen_kwargs["victim_url"] = body.victim_url
         raw_payloads = await payload_generator_service.generate(
-            body.agent_description, analysis_dict
+            body.agent_description, analysis_dict, **gen_kwargs,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -438,7 +449,12 @@ async def evaluate_payloads(
 
     try:
         payload_dicts = [p.model_dump(mode="json") for p in body.payloads]
-        summaries = await evaluator_service.evaluate(payload_dicts)
+        summaries = await evaluator_service.evaluate(
+            payload_dicts,
+            victim_url   = body.victim_url   or "",
+            victim_model = body.victim_model or "",
+            max_per_vuln = body.max_payloads_per_vuln,
+        )
     except Exception as exc:
         logger.error("Evaluation failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {exc}")
@@ -462,6 +478,58 @@ async def evaluate_payloads(
         total_fail=total_fail,
         total_unknown=total_unknown,
     )
+
+
+# ---------------------------------------------------------------------------
+# Agentic Red-Team Loop
+# ---------------------------------------------------------------------------
+
+@app.post("/api/redteam-loop", tags=["analysis"])
+async def redteam_loop(
+    body: RedTeamLoopRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Adaptive black-box red-team loop with ceiling:
+       Discover (iterative recon) → Plan → (Generate → Evaluate)* until any
+       FAIL or `ceiling` rounds.
+
+    Returns the full transcript: every discovery round's probes + replies and
+    the synthesized intel, planner output, every attack round's verdicts, the
+    final evaluation summary, and the stop_reason.
+    """
+    from redteam_loop import run_loop
+
+    logger.info(
+        "redteam-loop request — user=%s ceiling=%d max_per_vuln=%d discovery_rounds=%d use_pair=%s pair_attempts=%d backend=%s",
+        current_user["email"], body.ceiling, body.max_payloads_per_vuln, body.discovery_rounds,
+        body.use_pair, body.pair_attempts, body.refiner_backend or "(env)",
+    )
+
+    try:
+        result = await run_loop(
+            description      = body.agent_description,
+            uses_mcp         = body.uses_mcp,
+            uses_rag         = body.uses_rag,
+            victim_url       = body.victim_url   or "",
+            victim_model     = body.victim_model or "",
+            max_per_vuln     = body.max_payloads_per_vuln,
+            ceiling          = body.ceiling,
+            discovery_rounds = body.discovery_rounds,
+            probes_per_round = body.probes_per_round,
+            use_pair         = body.use_pair,
+            pair_attempts    = body.pair_attempts,
+            refiner_backend  = body.refiner_backend or "",
+        )
+    except Exception as exc:
+        logger.error("redteam-loop failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Red-team loop failed: {exc}")
+
+    logger.info(
+        "redteam-loop complete — stop=%s rounds=%d duration=%.1fs",
+        result.get("stop_reason"), len(result.get("rounds", [])), result.get("duration_seconds", 0),
+    )
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -549,6 +617,24 @@ async def health_check():
         "status": "healthy",
         "model": analysis_service.model,
         "api_version": "2.0.0",
+    }
+
+
+@app.get("/api/system-info", tags=["utility"])
+async def system_info():
+    """
+    Reports which models and victim endpoint this backend is wired to.
+    Used by the frontend to populate attack-package JSON exports so a
+    reviewer can verify exactly which components produced a scan.
+    """
+    return {
+        "analyzer_model":  analysis_service.model,
+        "analyzer_url":    analysis_service.base_url,
+        "generator_model": os.getenv("REDTEAM_MODEL", "redteam"),
+        "victim_model":    os.getenv("VICTIM_MODEL", "mistral"),
+        "victim_url":      os.getenv("VICTIM_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")),
+        "evaluator_model": os.getenv("EVALUATOR_MODEL", "llama3"),
+        "scoring_mode":    os.getenv("SCORING_MODE", "cvss"),
     }
 
 
