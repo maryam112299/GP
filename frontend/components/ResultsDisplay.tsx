@@ -38,9 +38,9 @@ type Stage = 'analyzed' | 'generating-payloads' | 'simulating' | 'done' | 'error
 
 function priorityColor(p: string): string {
   switch (p.toUpperCase()) {
-    case 'CRITICAL': return '#f85149';
-    case 'HIGH':     return '#fb923c';
-    case 'MEDIUM':   return '#f0a500';
+    case 'CRITICAL': return '#dc2626';
+    case 'HIGH':     return '#ea580c';
+    case 'MEDIUM':   return '#ca8a04';
     default:         return '#64748b';
   }
 }
@@ -63,10 +63,10 @@ function ObjectiveCard({ obj }: { obj: AttackObjective }) {
   return (
     <div
       className="rounded-xl p-4"
-      style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${color}33` }}
+      style={{ background: '#fff', border: `1px solid var(--color-border)` }}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <h4 className="text-sm font-semibold text-white">{obj.vulnerability_type}</h4>
+        <h4 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>{obj.vulnerability_type}</h4>
         <span
           className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
           style={{ background: `${color}1f`, color }}
@@ -92,14 +92,14 @@ function ObjectiveCard({ obj }: { obj: AttackObjective }) {
       </div>
 
       <p className="text-xs leading-relaxed mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-        <span className="font-semibold text-white">Strategy:</span> {obj.exploit_strategy}
+        <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>Strategy:</span> {obj.exploit_strategy}
       </p>
       <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-        <span className="font-semibold text-white">Goal:</span> {obj.adversarial_objective}
+        <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>Goal:</span> {obj.adversarial_objective}
       </p>
       {obj.required_camouflage && obj.required_camouflage.toUpperCase() !== 'NONE' && (
         <p className="text-xs leading-relaxed mt-2 italic"
-           style={{ color: '#a78bfa' }}>
+           style={{ color: 'var(--color-maestro)' }}>
           <span className="font-semibold">Camouflage:</span> {obj.required_camouflage}
         </p>
       )}
@@ -118,9 +118,9 @@ function StageBanner({ stage, error }: { stage: Stage; error: string }) {
       <div
         className="rounded-xl p-4 text-sm"
         style={{
-          background: 'rgba(248,81,73,0.08)',
-          border:    '1px solid rgba(248,81,73,0.25)',
-          color:     '#fca5a5',
+          background: 'var(--color-critical-bg)',
+          border:    '1px solid var(--color-critical-bd)',
+          color:     'var(--color-critical)',
         }}
       >
         Pipeline stopped: {error}
@@ -136,12 +136,12 @@ function StageBanner({ stage, error }: { stage: Stage; error: string }) {
     <div
       className="rounded-xl p-4 flex items-center gap-3 text-sm"
       style={{
-        background: 'rgba(6,214,160,0.06)',
-        border:    '1px solid rgba(6,214,160,0.25)',
-        color:     '#a7f3d0',
+        background: 'var(--color-success-bg)',
+        border:    '1px solid var(--color-success-bd)',
+        color:     'var(--color-success)',
       }}
     >
-      {stage !== 'done' && <Loader2 className="w-4 h-4 animate-spin" />}
+      {stage !== 'done' && <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--color-accent)' }} />}
       {label}
     </div>
   );
@@ -235,11 +235,11 @@ export default function ResultsDisplay({
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="glass-card p-6"
+        className="card p-6"
       >
         <div className="flex items-start justify-between mb-4 gap-4">
           <div>
-            <h3 className="text-lg font-bold text-white">Attack Plan</h3>
+            <h3 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>Attack Plan</h3>
             <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
               Agent ID: <span className="font-mono">{agent_id}</span>
               {durationSeconds !== undefined && (
@@ -257,7 +257,7 @@ export default function ResultsDisplay({
 
         {lockShown && (
           <div className="rounded-lg p-3 mb-4 text-xs flex flex-wrap gap-x-4 gap-y-1"
-               style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.30)', color: '#c4b5fd' }}>
+               style={{ background: 'var(--color-maestro-bg)', border: '1px solid #e9d5ff', color: 'var(--color-maestro)' }}>
             <span><span className="font-semibold">Scope lock:</span> {scope_lock_strength}</span>
             {allowed_scope && (
               <span><span className="font-semibold">Allowed scope:</span> {allowed_scope}</span>

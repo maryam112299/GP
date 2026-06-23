@@ -232,6 +232,30 @@ def create_analysis_record(
     }
 
 
+def get_analysis_by_id(scan_id: int, user_id: int):
+    with _get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id, user_id, input_text, output_json, duration_seconds, created_at, mode, scoring_mode
+            FROM analyses
+            WHERE id = ? AND user_id = ?
+            """,
+            (scan_id, user_id),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "id":               row["id"],
+        "user_id":          row["user_id"],
+        "input_text":       row["input_text"],
+        "output":           json.loads(row["output_json"]),
+        "duration_seconds": row["duration_seconds"],
+        "created_at":       row["created_at"],
+        "mode":             row["mode"],
+        "scoring_mode":     row["scoring_mode"],
+    }
+
+
 def get_analyses_by_user_id(user_id: int) -> List[Dict[str, Any]]:
     with _get_connection() as conn:
         rows = conn.execute(

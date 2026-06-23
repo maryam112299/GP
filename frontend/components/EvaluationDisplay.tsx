@@ -25,15 +25,15 @@ function riskLabel(score: number): string {
 }
 
 function riskColor(score: number): string {
-  if (score === 0)    return '#3fb950';  // green
-  if (score < 0.34)  return '#3fb950';  // green
+  if (score === 0)    return '#16a34a';  // green
+  if (score < 0.34)  return '#16a34a';  // green
   if (score < 0.67)  return '#f0a500';  // amber
-  return '#f85149';                      // red
+  return '#dc2626';                      // red
 }
 
 function riskBg(score: number): string {
-  if (score === 0)    return 'rgba(63,185,80,0.08)';
-  if (score < 0.34)  return 'rgba(63,185,80,0.08)';
+  if (score === 0)    return 'var(--color-success-bg)';
+  if (score < 0.34)  return 'var(--color-success-bg)';
   if (score < 0.67)  return 'rgba(240,165,0,0.08)';
   return 'rgba(248,81,73,0.08)';
 }
@@ -53,7 +53,7 @@ function RiskGauge({ score }: { score: number }) {
     <div className="flex flex-col items-center gap-3">
       <svg width="128" height="128" viewBox="0 0 128 128">
         {/* Track */}
-        <circle cx="64" cy="64" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="12" />
+        <circle cx="64" cy="64" r={r} fill="none" stroke="#e5e7eb" strokeWidth="12" />
         {/* Fill */}
         <circle
           cx="64" cy="64" r={r}
@@ -66,7 +66,7 @@ function RiskGauge({ score }: { score: number }) {
           style={{ transition: 'stroke-dasharray 0.6s ease' }}
         />
         {/* Percentage text */}
-        <text x="64" y="60" textAnchor="middle" fill="white" fontSize="22" fontWeight="700">
+        <text x="64" y="60" textAnchor="middle" fill="#0f172a" fontSize="22" fontWeight="700">
           {pct}%
         </text>
         <text x="64" y="78" textAnchor="middle" fill={color} fontSize="9" fontWeight="600" letterSpacing="0.08em">
@@ -82,8 +82,8 @@ function RiskGauge({ score }: { score: number }) {
 // Per-vulnerability row
 // ---------------------------------------------------------------------------
 function verdictColor(result: string): string {
-  if (result === 'SUCCESS') return '#3fb950';
-  if (result === 'FAIL')    return '#f85149';
+  if (result === 'SUCCESS') return '#16a34a';
+  if (result === 'FAIL')    return '#dc2626';
   return '#94a3b8';
 }
 
@@ -97,19 +97,19 @@ function EvidenceList({ items }: { items: NonNullable<PayloadEvalResult['evidenc
   return (
     <div>
       <p className="text-[10px] uppercase font-semibold mb-1"
-         style={{ color: '#fca5a5' }}>Evidence ({items.length})</p>
+         style={{ color: 'var(--color-critical)' }}>Evidence ({items.length})</p>
       <ul className="space-y-1 text-[11px]">
         {items.map((ev, i) => {
           const rest = Object.fromEntries(Object.entries(ev).filter(([k]) => k !== 'kind'));
           return (
             <li key={i} className="rounded p-2"
-                style={{ background: 'rgba(248,81,73,0.06)', border: '1px solid rgba(248,81,73,0.25)' }}>
-              <div className="font-mono font-semibold" style={{ color: '#fca5a5' }}>
+                style={{ background: 'var(--color-critical-bg)', border: '1px solid rgba(248,81,73,0.25)' }}>
+              <div className="font-mono font-semibold" style={{ color: 'var(--color-critical)' }}>
                 {String(ev.kind || 'finding')}
               </div>
               {Object.entries(rest).map(([k, v]) => (
                 <div key={k} className="font-mono"
-                     style={{ color: '#cbd5e1', wordBreak: 'break-word' }}>
+                     style={{ color: '#475569', wordBreak: 'break-word' }}>
                   <span style={{ color: 'var(--color-text-muted)' }}>{k}:</span>{' '}
                   {typeof v === 'string' ? v : JSON.stringify(v)}
                 </div>
@@ -128,7 +128,7 @@ function PayloadAttemptCard({ pr }: { pr: PayloadEvalResult }) {
   return (
     <div
       className="rounded-lg p-3 text-xs space-y-2"
-      style={{ background: 'rgba(0,0,0,0.25)', border: `1px solid ${c}22` }}
+      style={{ background: '#f8fafc', border: `1px solid ${c}22` }}
     >
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="font-bold px-1.5 py-0.5 rounded"
@@ -145,7 +145,7 @@ function PayloadAttemptCard({ pr }: { pr: PayloadEvalResult }) {
         <p className="text-[10px] uppercase font-semibold mb-1"
            style={{ color: 'var(--color-text-muted)' }}>Payload sent</p>
         <pre className="whitespace-pre-wrap font-mono leading-snug p-2 rounded"
-             style={{ background: 'rgba(0,0,0,0.45)', color: '#e2e8f0', wordBreak: 'break-word' }}>
+             style={{ background: '#0f172a', color: '#f1f5f9', wordBreak: 'break-word' }}>
 {pr.payload}
         </pre>
       </div>
@@ -153,7 +153,7 @@ function PayloadAttemptCard({ pr }: { pr: PayloadEvalResult }) {
         <p className="text-[10px] uppercase font-semibold mb-1"
            style={{ color: 'var(--color-text-muted)' }}>Victim response</p>
         <pre className="whitespace-pre-wrap font-mono leading-snug p-2 rounded"
-             style={{ background: 'rgba(0,0,0,0.45)', color: '#cbd5e1', wordBreak: 'break-word' }}>
+             style={{ background: '#0f172a', color: '#475569', wordBreak: 'break-word' }}>
 {pr.victim_response || '(empty)'}
         </pre>
       </div>
@@ -188,7 +188,7 @@ function VulnRow({ item }: { item: VulnEvalSummary }) {
                 : <ChevronRight size={14} className="mt-0.5" style={{ color: 'var(--color-text-muted)' }} />
             )}
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white truncate">{item.vulnerability_type}</p>
+              <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>{item.vulnerability_type}</p>
               <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-text-muted)' }}>
                 {item.target_asset}
               </p>
@@ -208,7 +208,7 @@ function VulnRow({ item }: { item: VulnEvalSummary }) {
             <span>Risk score</span>
             <span style={{ color }}>{pct}%</span>
           </div>
-          <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
+          <div className="h-1.5 rounded-full" style={{ background: 'var(--color-border)' }}>
             <div
               className="h-full rounded-full transition-all duration-500"
               style={{ width: `${pct}%`, background: color }}
@@ -218,8 +218,8 @@ function VulnRow({ item }: { item: VulnEvalSummary }) {
 
         {/* Counts */}
         <div className="flex gap-3 text-xs">
-          <span style={{ color: '#3fb950' }}>✓ {item.success_count} refused</span>
-          <span style={{ color: '#f85149' }}>✗ {item.fail_count} complied</span>
+          <span style={{ color: 'var(--color-success)' }}>✓ {item.success_count} refused</span>
+          <span style={{ color: 'var(--color-critical)' }}>✗ {item.fail_count} complied</span>
           {item.unknown_count > 0 && (
             <span style={{ color: '#94a3b8' }}>? {item.unknown_count} unknown</span>
           )}
@@ -301,9 +301,9 @@ function DownloadReportButton({
         disabled={loading || !token || !missionFile}
         className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
         style={{
-          background: loading ? 'rgba(6,214,160,0.15)' : 'rgba(6,214,160,0.12)',
-          border:     '1px solid rgba(6,214,160,0.35)',
-          color:      loading ? 'rgba(6,214,160,0.6)' : '#06d6a0',
+          background: 'var(--color-accent-soft)',
+          border:     '1px solid var(--color-border-accent)',
+          color:      loading ? '#94a3b8' : 'var(--color-accent)',
           cursor:     loading ? 'not-allowed' : 'pointer',
         }}
       >
@@ -328,7 +328,7 @@ function DownloadReportButton({
         )}
       </button>
       {error && (
-        <p className="mt-1.5 text-xs" style={{ color: '#f85149' }}>{error}</p>
+        <p className="mt-1.5 text-xs" style={{ color: 'var(--color-critical)' }}>{error}</p>
       )}
     </div>
   );
@@ -470,11 +470,11 @@ export default function EvaluationDisplay({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="glass-card p-6 mt-4"
+      className="card p-6 mt-4"
     >
       {/* Title row + download buttons */}
       <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-        <h3 className="text-lg font-bold text-white">Attack Simulation Results</h3>
+        <h3 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>Attack Simulation Results</h3>
         <div className="flex items-center gap-2 flex-wrap">
           {missionFile && (
             <DownloadPackageButton
@@ -518,13 +518,13 @@ export default function EvaluationDisplay({
         <div className="flex-1 grid grid-cols-3 gap-3 w-full">
           {[
             { label: 'Tested',      value: total_tested,  color: 'var(--color-text-secondary)' },
-            { label: 'Refused',     value: total_success, color: '#3fb950' },
-            { label: 'Complied',    value: total_fail,    color: '#f85149' },
+            { label: 'Refused',     value: total_success, color: 'var(--color-success)' },
+            { label: 'Complied',    value: total_fail,    color: 'var(--color-critical)' },
           ].map(({ label, value, color }) => (
             <div
               key={label}
               className="rounded-xl p-3 text-center"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)' }}
+              style={{ background: 'var(--color-bg-base)', border: '1px solid var(--color-border)' }}
             >
               <p className="text-2xl font-bold" style={{ color }}>{value}</p>
               <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>{label}</p>
@@ -533,7 +533,7 @@ export default function EvaluationDisplay({
           {total_unknown > 0 && (
             <div
               className="rounded-xl p-3 text-center col-span-3 sm:col-span-1"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)' }}
+              style={{ background: 'var(--color-bg-base)', border: '1px solid var(--color-border)' }}
             >
               <p className="text-2xl font-bold" style={{ color: '#94a3b8' }}>{total_unknown}</p>
               <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>Unknown</p>

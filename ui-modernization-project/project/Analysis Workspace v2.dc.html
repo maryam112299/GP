@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Outfit',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+</style>
+</helmet>
+
+<div style="width:max-content;min-width:100%;min-height:100vh;padding:48px;background:#e7e5df;font-family:'Outfit',sans-serif;">
+
+  <div style="margin-bottom:8px;font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#78716c;">Analysis Workspace — layout explorations</div>
+  <div style="margin-bottom:36px;font-size:15px;color:#57534e;max-width:760px;line-height:1.6;">Same indigo palette — three different structural approaches to the workspace. Pick a layout and I'll build it out fully interactive.</div>
+
+  <div style="display:flex;gap:48px;align-items:flex-start;">
+
+    <!-- ====== FRAME D — SPLIT PANE ====== -->
+    <div style="flex:none;width:1060px;">
+      <div style="margin-bottom:14px;display:flex;align-items:baseline;gap:10px;">
+        <span style="font-size:13px;font-weight:700;color:#1c1917;">D · Split Pane</span>
+        <span style="font-size:12px;color:#78716c;">Form always left, results always right — no page jumps</span>
+      </div>
+      <div style="background:#f8fafc;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;border:1px solid #ececec;">
+
+        <!-- header -->
+        <div style="height:60px;padding:0 28px;display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:30px;height:30px;border-radius:8px;background:#4f46e5;display:flex;align-items:center;justify-content:center;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <span style="font-size:15px;font-weight:600;color:#0f172a;">Agent Security Tester</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;">
+            <span style="font-size:13px;color:#64748b;">Maya Okonkwo</span>
+            <div style="width:32px;height:32px;border-radius:9999px;background:#eef2ff;color:#4f46e5;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">MO</div>
+          </div>
+        </div>
+
+        <!-- split body -->
+        <div style="display:grid;grid-template-columns:380px 1fr;min-height:640px;">
+
+          <!-- left — form pane -->
+          <div style="padding:24px;border-right:1px solid #e5e7eb;background:#fff;display:flex;flex-direction:column;gap:20px;">
+            <!-- mode tabs -->
+            <div style="display:flex;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+              <div style="flex:1;padding:11px 0;text-align:center;background:#4f46e5;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:7px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Quick
+              </div>
+              <div style="flex:1;padding:11px 0;text-align:center;background:#fff;color:#64748b;font-size:13px;font-weight:600;border-left:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;gap:7px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.142 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.142 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>
+                Expert
+              </div>
+            </div>
+
+            <!-- agent description label -->
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Agent Description</div>
+              <div style="border:1.5px solid #e5e7eb;border-radius:10px;padding:13px 15px;font-size:13px;color:#334155;line-height:1.7;min-height:100px;background:#fafbfc;">A recruiting assistant that screens CVs and sends interview invites via email using the HR database and LinkedIn API.</div>
+            </div>
+
+            <!-- presets -->
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Presets</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <span style="font-size:12px;color:#4338ca;padding:6px 14px;border-radius:9999px;background:#eef2ff;font-weight:500;">Recruiter Bot</span>
+                <span style="font-size:12px;color:#475569;padding:6px 14px;border-radius:9999px;border:1px solid #e5e7eb;background:#fff;">Code Assistant</span>
+                <span style="font-size:12px;color:#475569;padding:6px 14px;border-radius:9999px;border:1px solid #e5e7eb;background:#fff;">Customer Support</span>
+              </div>
+            </div>
+
+            <!-- integrations -->
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">Integrations</div>
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <label style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1.5px solid #c7d2fe;border-radius:10px;background:#eef2ff;cursor:pointer;">
+                  <span style="font-size:13px;font-weight:500;color:#3730a3;">MCP Integration</span>
+                  <span style="width:36px;height:20px;border-radius:9999px;background:#4f46e5;display:flex;align-items:center;padding:2px;"><span style="width:16px;height:16px;border-radius:9999px;background:#fff;margin-left:auto;"></span></span>
+                </label>
+                <label style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;cursor:pointer;">
+                  <span style="font-size:13px;font-weight:500;color:#475569;">RAG Integration</span>
+                  <span style="width:36px;height:20px;border-radius:9999px;background:#e2e8f0;display:flex;align-items:center;padding:2px;"><span style="width:16px;height:16px;border-radius:9999px;background:#fff;"></span></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- analyze button pinned at bottom -->
+            <div style="margin-top:auto;height:46px;border-radius:10px;background:#4f46e5;color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Analyze Agent
+            </div>
+          </div>
+
+          <!-- right — results pane -->
+          <div style="padding:24px;display:flex;flex-direction:column;gap:18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:9px;">
+                <div style="width:22px;height:22px;border-radius:9999px;background:#dcfce7;display:flex;align-items:center;justify-content:center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                <span style="font-size:16px;font-weight:600;color:#0f172a;">Security Analysis Complete</span>
+              </div>
+              <span style="font-size:12px;color:#94a3b8;padding:5px 12px;border:1px solid #e5e7eb;border-radius:8px;">Download PDF</span>
+            </div>
+
+            <!-- gauge + breakdown row -->
+            <div style="display:grid;grid-template-columns:180px 1fr;gap:16px;">
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:20px;display:flex;flex-direction:column;align-items:center;">
+                <div style="width:110px;height:110px;border-radius:9999px;background:conic-gradient(#ea580c 0% 73%, #f1f5f9 73% 100%);display:flex;align-items:center;justify-content:center;">
+                  <div style="width:84px;height:84px;border-radius:9999px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                    <span style="font-size:26px;font-weight:700;color:#0f172a;line-height:1;">73</span>
+                    <span style="font-size:10px;color:#94a3b8;margin-top:2px;">Risk</span>
+                  </div>
+                </div>
+                <span style="font-size:12px;color:#ea580c;font-weight:600;margin-top:10px;">HIGH RISK</span>
+              </div>
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:18px;display:flex;flex-direction:column;justify-content:center;gap:12px;">
+                <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:11px;font-weight:700;color:#dc2626;width:56px;">CRITICAL</span><div style="flex:1;height:7px;border-radius:9999px;background:#f1f5f9;overflow:hidden;"><div style="width:25%;height:100%;background:#dc2626;border-radius:9999px;"></div></div><span style="font-size:12px;color:#334155;width:16px;text-align:right;">2</span></div>
+                <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:11px;font-weight:700;color:#ea580c;width:56px;">HIGH</span><div style="flex:1;height:7px;border-radius:9999px;background:#f1f5f9;overflow:hidden;"><div style="width:38%;height:100%;background:#ea580c;border-radius:9999px;"></div></div><span style="font-size:12px;color:#334155;width:16px;text-align:right;">3</span></div>
+                <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:11px;font-weight:700;color:#ca8a04;width:56px;">MEDIUM</span><div style="flex:1;height:7px;border-radius:9999px;background:#f1f5f9;overflow:hidden;"><div style="width:13%;height:100%;background:#ca8a04;border-radius:9999px;"></div></div><span style="font-size:12px;color:#334155;width:16px;text-align:right;">1</span></div>
+                <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:11px;font-weight:700;color:#2563eb;width:56px;">LOW</span><div style="flex:1;height:7px;border-radius:9999px;background:#f1f5f9;overflow:hidden;"><div style="width:25%;height:100%;background:#2563eb;border-radius:9999px;"></div></div><span style="font-size:12px;color:#334155;width:16px;text-align:right;">2</span></div>
+              </div>
+            </div>
+
+            <!-- vuln list -->
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:10px;">
+                <span style="font-size:10px;font-weight:700;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:3px 7px;border-radius:5px;flex:none;">CRITICAL</span>
+                <span style="font-size:14px;font-weight:600;color:#0f172a;flex:1;">Prompt Injection via Tool Output</span>
+                <span style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:3px 8px;border-radius:9999px;">MAESTRO L3</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:10px;">
+                <span style="font-size:10px;font-weight:700;color:#ea580c;background:#fff7ed;border:1px solid #fed7aa;padding:3px 7px;border-radius:5px;flex:none;">HIGH</span>
+                <span style="font-size:14px;font-weight:600;color:#0f172a;flex:1;">Data Exfiltration via Crafted Queries</span>
+                <span style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:3px 8px;border-radius:9999px;">MAESTRO L5</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:10px;">
+                <span style="font-size:10px;font-weight:700;color:#ea580c;background:#fff7ed;border:1px solid #fed7aa;padding:3px 7px;border-radius:5px;flex:none;">HIGH</span>
+                <span style="font-size:14px;font-weight:600;color:#0f172a;flex:1;">Privilege Escalation via MCP Chaining</span>
+                <span style="font-size:10px;color:#0891b2;background:#ecfeff;padding:3px 8px;border-radius:9999px;">ATFAA</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== FRAME E — WIZARD STEPPER ====== -->
+    <div style="flex:none;width:1060px;">
+      <div style="margin-bottom:14px;display:flex;align-items:baseline;gap:10px;">
+        <span style="font-size:13px;font-weight:700;color:#1c1917;">E · Guided Wizard</span>
+        <span style="font-size:12px;color:#78716c;">Focused step-by-step flow — one thing at a time</span>
+      </div>
+      <div style="background:#f8fafc;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;border:1px solid #ececec;">
+
+        <!-- header -->
+        <div style="height:60px;padding:0 28px;display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:30px;height:30px;border-radius:8px;background:#4f46e5;display:flex;align-items:center;justify-content:center;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <span style="font-size:15px;font-weight:600;color:#0f172a;">Agent Security Tester</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;">
+            <span style="font-size:13px;color:#64748b;">Maya Okonkwo</span>
+            <div style="width:32px;height:32px;border-radius:9999px;background:#eef2ff;color:#4f46e5;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">MO</div>
+          </div>
+        </div>
+
+        <!-- stepper bar -->
+        <div style="background:#fff;border-bottom:1px solid #e5e7eb;padding:0 28px;">
+          <div style="display:flex;align-items:center;max-width:560px;padding:18px 0;gap:0;">
+
+            <!-- step 1 — done -->
+            <div style="display:flex;align-items:center;gap:9px;flex:none;">
+              <div style="width:28px;height:28px;border-radius:9999px;background:#4f46e5;display:flex;align-items:center;justify-content:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <span style="font-size:13px;font-weight:600;color:#4f46e5;">Configure</span>
+            </div>
+            <div style="flex:1;height:2px;background:#c7d2fe;margin:0 12px;"></div>
+
+            <!-- step 2 — active -->
+            <div style="display:flex;align-items:center;gap:9px;flex:none;">
+              <div style="width:28px;height:28px;border-radius:9999px;background:#4f46e5;border:3px solid #c7d2fe;display:flex;align-items:center;justify-content:center;"><span style="font-size:12px;font-weight:700;color:#fff;">2</span></div>
+              <span style="font-size:13px;font-weight:600;color:#4f46e5;">Analyze</span>
+            </div>
+            <div style="flex:1;height:2px;background:#e5e7eb;margin:0 12px;"></div>
+
+            <!-- step 3 — upcoming -->
+            <div style="display:flex;align-items:center;gap:9px;flex:none;">
+              <div style="width:28px;height:28px;border-radius:9999px;border:2px solid #e5e7eb;background:#fff;display:flex;align-items:center;justify-content:center;"><span style="font-size:12px;font-weight:700;color:#94a3b8;">3</span></div>
+              <span style="font-size:13px;font-weight:500;color:#94a3b8;">Review</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- step content — centered -->
+        <div style="padding:48px 28px;display:flex;flex-direction:column;align-items:center;">
+          <div style="width:100%;max-width:580px;">
+
+            <!-- step headline -->
+            <div style="text-align:center;margin-bottom:32px;">
+              <div style="width:52px;height:52px;border-radius:16px;background:#eef2ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div style="font-size:22px;font-weight:700;color:#0f172a;">Running Security Analysis</div>
+              <div style="font-size:14px;color:#64748b;margin-top:8px;">Evaluating against MAESTRO + ATFAA frameworks</div>
+            </div>
+
+            <!-- progress card -->
+            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:28px;">
+              <!-- agent summary chip -->
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:22px;">
+                <div style="width:32px;height:32px;border-radius:8px;background:#eef2ff;display:flex;align-items:center;justify-content:center;flex:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+                <div><div style="font-size:13px;font-weight:600;color:#0f172a;">Recruiter Assistant</div><div style="font-size:12px;color:#64748b;">Quick Mode · MCP enabled</div></div>
+              </div>
+
+              <!-- progress steps -->
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <div style="width:20px;height:20px;border-radius:9999px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex:none;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                  <span style="font-size:13px;color:#16a34a;font-weight:500;">MAESTRO Layer analysis</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <div style="width:20px;height:20px;border-radius:9999px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex:none;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                  <span style="font-size:13px;color:#16a34a;font-weight:500;">ATFAA domain mapping</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <div style="width:20px;height:20px;border-radius:9999px;border:2px solid #4f46e5;display:flex;align-items:center;justify-content:center;flex:none;">
+                    <div style="width:8px;height:8px;border-radius:9999px;background:#4f46e5;"></div>
+                  </div>
+                  <span style="font-size:13px;color:#4f46e5;font-weight:500;">MCP attack surface mapping…</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <div style="width:20px;height:20px;border-radius:9999px;border:2px solid #e2e8f0;flex:none;"></div>
+                  <span style="font-size:13px;color:#94a3b8;">Generating risk score</span>
+                </div>
+              </div>
+
+              <!-- progress bar -->
+              <div style="height:4px;background:#f1f5f9;border-radius:9999px;margin-top:22px;overflow:hidden;">
+                <div style="width:65%;height:100%;background:linear-gradient(90deg,#4f46e5,#818cf8);border-radius:9999px;"></div>
+              </div>
+              <div style="font-size:12px;color:#94a3b8;margin-top:8px;text-align:right;">65% — about 8 seconds remaining</div>
+            </div>
+
+            <!-- results preview (step 3 hint) -->
+            <div style="margin-top:24px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:22px;opacity:0.45;">
+              <div style="font-size:13px;font-weight:600;color:#64748b;margin-bottom:14px;display:flex;align-items:center;gap:7px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Results will appear here
+              </div>
+              <div style="display:flex;gap:10px;">
+                <div style="flex:1;height:52px;background:#f8fafc;border-radius:8px;"></div>
+                <div style="flex:1;height:52px;background:#f8fafc;border-radius:8px;"></div>
+                <div style="flex:1;height:52px;background:#f8fafc;border-radius:8px;"></div>
+                <div style="flex:1;height:52px;background:#f8fafc;border-radius:8px;"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== FRAME F — COMMAND BAR + DASHBOARD ====== -->
+    <div style="flex:none;width:1060px;">
+      <div style="margin-bottom:14px;display:flex;align-items:baseline;gap:10px;">
+        <span style="font-size:13px;font-weight:700;color:#1c1917;">F · Command Bar + Dashboard</span>
+        <span style="font-size:12px;color:#78716c;">Inline query bar, results fill a full dashboard grid</span>
+      </div>
+      <div style="background:#f8fafc;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;border:1px solid #ececec;">
+
+        <!-- header -->
+        <div style="height:60px;padding:0 28px;display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:30px;height:30px;border-radius:8px;background:#4f46e5;display:flex;align-items:center;justify-content:center;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <span style="font-size:15px;font-weight:600;color:#0f172a;">Agent Security Tester</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;">
+            <span style="font-size:13px;color:#64748b;">Maya Okonkwo</span>
+            <div style="width:32px;height:32px;border-radius:9999px;background:#eef2ff;color:#4f46e5;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">MO</div>
+          </div>
+        </div>
+
+        <!-- command bar -->
+        <div style="background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 24px;display:flex;align-items:center;gap:12px;">
+          <!-- mode pill -->
+          <div style="display:flex;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;flex:none;">
+            <div style="padding:8px 14px;background:#4f46e5;color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Quick
+            </div>
+            <div style="padding:8px 14px;background:#fff;color:#94a3b8;font-size:12px;font-weight:600;border-left:1px solid #e5e7eb;display:flex;align-items:center;gap:6px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.142 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.142 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>Expert
+            </div>
+          </div>
+          <!-- inline input -->
+          <div style="flex:1;border:1.5px solid #c7d2fe;border-radius:9px;padding:9px 14px;font-size:13px;color:#334155;background:#fafbff;">Recruiter assistant — screens CVs, sends interview invites via HR database + LinkedIn API</div>
+          <!-- chips -->
+          <div style="display:flex;align-items:center;gap:6px;flex:none;">
+            <span style="font-size:11px;font-weight:600;color:#4338ca;padding:5px 10px;background:#eef2ff;border-radius:6px;">MCP</span>
+          </div>
+          <!-- button -->
+          <div style="height:38px;padding:0 18px;background:#4f46e5;color:#fff;font-size:13px;font-weight:600;border-radius:9px;display:flex;align-items:center;gap:7px;flex:none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Analyze
+          </div>
+        </div>
+
+        <!-- dashboard grid -->
+        <div style="padding:22px;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:auto auto;gap:16px;">
+
+          <!-- stat cards row -->
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <div style="width:90px;height:90px;border-radius:9999px;background:conic-gradient(#ea580c 0% 73%, #f1f5f9 73% 100%);display:flex;align-items:center;justify-content:center;">
+              <div style="width:68px;height:68px;border-radius:9999px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <span style="font-size:22px;font-weight:700;color:#0f172a;line-height:1;">73</span>
+                <span style="font-size:9px;color:#94a3b8;margin-top:1px;">Risk</span>
+              </div>
+            </div>
+            <span style="font-size:11px;color:#ea580c;font-weight:600;margin-top:10px;">HIGH RISK</span>
+          </div>
+
+          <div style="background:#fff;border:1px solid #fecaca;border-radius:14px;padding:20px;display:flex;flex-direction:column;justify-content:center;">
+            <div style="font-size:11px;font-weight:700;color:#dc2626;letter-spacing:.05em;margin-bottom:6px;">CRITICAL</div>
+            <div style="font-size:40px;font-weight:800;color:#dc2626;line-height:1;">2</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:6px;">vulnerabilities</div>
+          </div>
+
+          <div style="background:#fff;border:1px solid #fed7aa;border-radius:14px;padding:20px;display:flex;flex-direction:column;justify-content:center;">
+            <div style="font-size:11px;font-weight:700;color:#ea580c;letter-spacing:.05em;margin-bottom:6px;">HIGH</div>
+            <div style="font-size:40px;font-weight:800;color:#ea580c;line-height:1;">3</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:6px;">vulnerabilities</div>
+          </div>
+
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:20px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:12px;">Severity Breakdown</div>
+            <div style="display:flex;flex-direction:column;gap:9px;">
+              <div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;border-radius:9999px;background:#f1f5f9;overflow:hidden;"><div style="width:25%;height:100%;background:#dc2626;border-radius:9999px;"></div></div><span style="font-size:11px;color:#94a3b8;">2</span></div>
+              <div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;border-radius:9999px;background:#f1f5f9;overflow:hidden;"><div style="width:38%;height:100%;background:#ea580c;border-radius:9999px;"></div></div><span style="font-size:11px;color:#94a3b8;">3</span></div>
+              <div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;border-radius:9999px;background:#f1f5f9;overflow:hidden;"><div style="width:13%;height:100%;background:#ca8a04;border-radius:9999px;"></div></div><span style="font-size:11px;color:#94a3b8;">1</span></div>
+              <div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;border-radius:9999px;background:#f1f5f9;overflow:hidden;"><div style="width:25%;height:100%;background:#3b82f6;border-radius:9999px;"></div></div><span style="font-size:11px;color:#94a3b8;">2</span></div>
+            </div>
+          </div>
+
+          <!-- vulnerability list — full width -->
+          <div style="grid-column:1 / -1;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+            <div style="padding:14px 18px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-size:14px;font-weight:600;color:#0f172a;">Vulnerabilities</span>
+              <span style="font-size:12px;color:#94a3b8;">8 found · sorted by severity</span>
+            </div>
+            <div style="display:flex;flex-direction:column;">
+              <div style="padding:13px 18px;display:flex;align-items:center;gap:11px;border-bottom:1px solid #f8fafc;">
+                <span style="font-size:10px;font-weight:700;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:3px 7px;border-radius:5px;flex:none;">CRITICAL</span>
+                <span style="font-size:14px;font-weight:600;color:#0f172a;flex:1;">Prompt Injection via Tool Output</span>
+                <span style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:3px 8px;border-radius:9999px;flex:none;">MAESTRO L3</span>
+                <span style="font-size:10px;color:#0891b2;background:#ecfeff;padding:3px 8px;border-radius:9999px;flex:none;">ATFAA</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+              <div style="padding:13px 18px;display:flex;align-items:center;gap:11px;border-bottom:1px solid #f8fafc;">
+                <span style="font-size:10px;font-weight:700;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:3px 7px;border-radius:5px;flex:none;">CRITICAL</span>
+                <span style="font-size:14px;font-weight:600;color:#0f172a;flex:1;">Indirect Prompt Injection via Email Content</span>
+                <span style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:3px 8px;border-radius:9999px;flex:none;">MAESTRO L2</span>
+                <span style="font-size:10px;color:#0891b2;background:#ecfeff;padding:3px 8px;border-radius:9999px;flex:none;">ATFAA</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+              <div style="padding:13px 18px;display:flex;align-items:center;gap:11px;border-bottom:1px solid #f8fafc;">
+                <span style="font-size:10px;font-weight:700;color:#ea580c;background:#fff7ed;border:1px solid #fed7aa;padding:3px 7px;border-radius:5px;flex:none;">HIGH</span>
+                <span style="font-size:14px;font-weight:600;color:#0f172a;flex:1;">Data Exfiltration via Crafted Queries</span>
+                <span style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:3px 8px;border-radius:9999px;flex:none;">MAESTRO L5</span>
+                <span style="font-size:10px;color:#0891b2;background:#ecfeff;padding:3px 8px;border-radius:9999px;flex:none;">ATFAA</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

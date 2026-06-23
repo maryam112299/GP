@@ -1,56 +1,125 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
-import { authApi, analysisApi, redTeamApi, type RedTeamLoopResponse } from '@/lib/api';
-import type { MissionFile, UserProfile, AnalysisMode, ExpertConfig } from '@/types';
-import Header from '@/components/ui/Header';
+import { authApi, analysisApi, redTeamApi, scansApi, type RedTeamLoopResponse } from '@/lib/api';
+import type { MissionFile, UserProfile, AnalysisMode, ExpertConfig, ScanRecord } from '@/types';
+import AppShell, { type AppView } from '@/components/layout/AppShell';
 import AuthModal from '@/components/auth/AuthModal';
 import ModeSelector from '@/components/analysis/ModeSelector';
 import QuickAnalysis, { type QuickScanConfig } from '@/components/analysis/QuickAnalysis';
 import ExpertAnalysis from '@/components/analysis/ExpertAnalysis';
+import AnalyzingPanel from '@/components/analysis/AnalyzingPanel';
 import ResultsDisplay from '@/components/ResultsDisplay';
+import Dashboard from '@/components/dashboard/Dashboard';
+import Settings from '@/components/settings/Settings';
 import toast from 'react-hot-toast';
+import { Shield } from 'lucide-react';
 
+// ---------------------------------------------------------------------------
+// DEV: set to true to skip login and preview the UI immediately.
+// Flip back to false before real use / deployment.
+// ---------------------------------------------------------------------------
+const DEV_BYPASS_AUTH = false;
+
+const DEV_FAKE_USER: UserProfile = {
+  id:             'dev',
+  email:          'dev@preview.local',
+  first_name:     'Dev',
+  last_name:      'Preview',
+  mobile_number:  '',
+  company_name:   'Security Team',
+  job_role:       'Security Engineer',
+  country:        '',
+};
+
+// ---------------------------------------------------------------------------
+// Workspace phase
+// ---------------------------------------------------------------------------
+type WorkspacePhase = 'input' | 'analyzing' | 'results';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function scanDate(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const diffDays = Math.floor((today.getTime() - d.getTime()) / 86400000);
+  if (diffDays === 0) return `Today, ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+  if (diffDays === 1) return 'Yesterday';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function scoreFromScan(scan: ScanRecord): number {
+  const plan = scan.output?.attack_plan ?? [];
+  if (!plan.length) return 0;
+  const crit = plan.filter(o => o.priority === 'CRITICAL').length;
+  const high = plan.filter(o => o.priority === 'HIGH').length;
+  return Math.min(99, crit * 20 + high * 8);
+}
+
+// ---------------------------------------------------------------------------
 export default function Home() {
-  // Auth state
-  const [token, setToken]         = useState('');
-  const [user, setUser]           = useState<UserProfile | null>(null);
+  // Auth
+  const [token,         setToken]         = useState('');
+  const [user,          setUser]          = useState<UserProfile | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  // Analysis state
-  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('quick');
-  const [isAnalyzing, setIsAnalyzing]   = useState(false);
-  const [results, setResults]           = useState<MissionFile | null>(null);
-  const [resultMode, setResultMode]     = useState<AnalysisMode>('quick');
-  const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
-  const [submittedDescription, setSubmittedDescription] = useState('');
+  // Shell
+  const [view,          setView]          = useState<AppView>('workspace');
+  const [sessions,      setSessions]      = useState<{ id: string; agent: string; date: string; score: number }[]>([]);
+  const [activeSession, setActiveSession] = useState<string | null>(null);
 
-  // Quick-mode "victim wiring" — flows from QuickAnalysis form into evaluate
-  const [victimUrl,   setVictimUrl]   = useState('');
-  const [victimModel, setVictimModel] = useState('');
-  const [maxPayloads, setMaxPayloads] = useState(5);
-  const [loopResult,  setLoopResult]  = useState<RedTeamLoopResponse | null>(null);
+  // Analysis
+  const [analysisMode,  setAnalysisMode]  = useState<AnalysisMode>('quick');
+  const [phase,         setPhase]         = useState<WorkspacePhase>('input');
+  const [results,       setResults]       = useState<MissionFile | null>(null);
+  const [resultMode,    setResultMode]    = useState<AnalysisMode>('quick');
+  const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
+  const [submittedDesc, setSubmittedDesc] = useState('');
+  const [lastConfig,    setLastConfig]    = useState<QuickScanConfig | null>(null);
+
+  // Quick-mode victim wiring
+  const [victimUrl,    setVictimUrl]    = useState('');
+  const [victimModel,  setVictimModel]  = useState('');
+  const [maxPayloads,  setMaxPayloads]  = useState(5);
+  const [loopResult,   setLoopResult]   = useState<RedTeamLoopResponse | null>(null);
 
   // -------------------------------------------------------------------------
-  // Restore session on mount
+  // Session restore
   // -------------------------------------------------------------------------
   useEffect(() => {
-    // Try restoring session via cookie first; fall back to stored token
+    if (DEV_BYPASS_AUTH) {
+      setUser(DEV_FAKE_USER);
+      setIsAuthLoading(false);
+      return;
+    }
     const stored = localStorage.getItem('auth_token');
-
     authApi.me(stored ?? undefined)
-      .then((profile) => {
+      .then(profile => {
         setUser(profile);
         if (stored) setToken(stored);
       })
-      .catch(() => {
-        localStorage.removeItem('auth_token');
-        setToken('');
-      })
+      .catch(() => { localStorage.removeItem('auth_token'); })
       .finally(() => setIsAuthLoading(false));
   }, []);
+
+  // Load scan history whenever token changes
+  const refreshSessions = useCallback((tok: string) => {
+    if (!tok || DEV_BYPASS_AUTH) return;
+    scansApi.getAll(tok).then(r => {
+      setSessions(
+        r.scans.map(s => ({
+          id:    String(s.id),
+          agent: s.output?.agent_id || 'Unknown Agent',
+          date:  scanDate(s.created_at),
+          score: scoreFromScan(s),
+        }))
+      );
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => { refreshSessions(token); }, [token, refreshSessions]);
 
   // -------------------------------------------------------------------------
   // Auth handlers
@@ -61,96 +130,122 @@ export default function Home() {
   }, []);
 
   const handleLogout = useCallback(async () => {
+    if (DEV_BYPASS_AUTH) { toast('Auth bypass is ON — sign-out disabled.'); return; }
     try { await authApi.logout(); } catch { /* best-effort */ }
     localStorage.removeItem('auth_token');
     setToken('');
     setUser(null);
     setResults(null);
+    setPhase('input');
+    setSessions([]);
   }, []);
 
   // -------------------------------------------------------------------------
-  // Analysis handlers
+  // New scan / session open
   // -------------------------------------------------------------------------
-  const runAnalysis = useCallback(
-    async (payload: Parameters<typeof analysisApi.analyze>[1]) => {
-      if (!token) { toast.error('Please sign in first.'); return; }
+  const handleNewScan = useCallback(() => {
+    setPhase('input');
+    setResults(null);
+    setLoopResult(null);
+    setActiveSession(null);
+    setView('workspace');
+  }, []);
 
-      setIsAnalyzing(true);
-      setResults(null);
-      setDurationSeconds(null);
-      const t0 = performance.now();
+  const handleOpenSession = useCallback(async (id: string) => {
+    setActiveSession(id);
+    setView('workspace');
+    setPhase('analyzing');
+    setResults(null);
+    setLoopResult(null);
+    try {
+      const scan = await scansApi.getById(id, token || undefined);
+      setResults(scan.output);
+      setResultMode((scan.mode as AnalysisMode) ?? 'quick');
+      setSubmittedDesc(scan.input_text ?? '');
+      setDurationSeconds(scan.duration_seconds ?? null);
+      setPhase('results');
+    } catch {
+      toast.error('Failed to load session.');
+      setPhase('input');
+    }
+  }, [token]);
 
-      try {
-        const data = await analysisApi.analyze(token, payload);
-        setResults(data);
-        setResultMode(payload.mode as AnalysisMode);
-        setSubmittedDescription(payload.agent_description);
-        setDurationSeconds((performance.now() - t0) / 1000);
-        toast.success('Analysis complete!');
-      } catch (err) {
-        if (err instanceof Error && err.message === 'SESSION_EXPIRED') {
-          toast.error('Session expired — please sign in again.');
-          handleLogout();
-          return;
-        }
-        toast.error(err instanceof Error ? err.message : 'Analysis failed. Is the backend running?');
-      } finally {
-        setIsAnalyzing(false);
-      }
-    },
-    [token, handleLogout],
-  );
-
-  const handleQuickAnalyze = useCallback(
-    async (config: QuickScanConfig) => {
-      // Capture victim wiring before kicking off — ResultsDisplay reads these.
-      setVictimUrl(config.victim_url);
-      setVictimModel(config.victim_model);
-      setMaxPayloads(config.max_payloads_per_vuln);
-
-      // Adaptive loop branch — call the new endpoint, render its result.
-      if (config.adaptive_loop) {
-        if (!token) { toast.error('Please sign in first.'); return; }
-        setIsAnalyzing(true);
-        setResults(null);
-        setLoopResult(null);
-        setDurationSeconds(null);
-        const t0 = performance.now();
-        try {
-          const data = await redTeamApi.runLoop(token, {
-            agent_description: config.description,
-            uses_mcp:          config.uses_mcp,
-            uses_rag:          config.uses_rag,
-            victim_url:        config.victim_url || undefined,
-            victim_model:      config.victim_model || undefined,
-            max_payloads_per_vuln: config.max_payloads_per_vuln,
-            ceiling:           config.ceiling,
-            discovery_rounds:  config.discovery_rounds,
-            probes_per_round:  config.probes_per_round,
-            use_pair:          config.use_pair,
-            pair_attempts:     config.pair_attempts,
-            refiner_backend:   config.refiner_backend,
-          });
-          setLoopResult(data);
-          setSubmittedDescription(config.description);
-          setDurationSeconds((performance.now() - t0) / 1000);
-          if (data.stop_reason === 'agent_broken') toast.success('Agent broken — see results.');
-          else if (data.stop_reason === 'ceiling_reached') toast(`Ceiling reached (${data.ceiling} rounds, no FAIL).`);
-          else toast.error(`Loop stopped: ${data.stop_reason}`);
-        } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'Adaptive loop failed.');
-        } finally {
-          setIsAnalyzing(false);
-        }
+  // -------------------------------------------------------------------------
+  // Analysis
+  // -------------------------------------------------------------------------
+  const runAnalysis = useCallback(async (
+    payload: Parameters<typeof analysisApi.analyze>[1],
+  ) => {
+    if (DEV_BYPASS_AUTH) { toast('Auth bypass is ON — connect a real backend to run analysis.'); return; }
+    if (!token) { toast.error('Please sign in first.'); return; }
+    setPhase('analyzing');
+    setResults(null);
+    setDurationSeconds(null);
+    const t0 = performance.now();
+    try {
+      const data = await analysisApi.analyze(token, payload);
+      setResults(data);
+      setResultMode(payload.mode as AnalysisMode);
+      setSubmittedDesc(payload.agent_description);
+      setDurationSeconds((performance.now() - t0) / 1000);
+      setPhase('results');
+      toast.success('Analysis complete!');
+      refreshSessions(token);
+    } catch (err) {
+      setPhase('input');
+      if (err instanceof Error && err.message === 'SESSION_EXPIRED') {
+        toast.error('Session expired — please sign in again.');
+        handleLogout();
         return;
       }
+      toast.error(err instanceof Error ? err.message : 'Analysis failed. Is the backend running?');
+    }
+  }, [token, handleLogout, refreshSessions]);
 
-      return runAnalysis(
-        analysisApi.buildQuickPayload(config.description, config.uses_mcp, config.uses_rag),
-      );
-    },
-    [runAnalysis, token],
-  );
+  const handleQuickAnalyze = useCallback(async (config: QuickScanConfig) => {
+    setVictimUrl(config.victim_url);
+    setVictimModel(config.victim_model);
+    setMaxPayloads(config.max_payloads_per_vuln);
+    setLastConfig(config);
+
+    if (config.adaptive_loop) {
+      if (DEV_BYPASS_AUTH) { toast('Auth bypass is ON — connect a real backend to run analysis.'); return; }
+      if (!token) { toast.error('Please sign in first.'); return; }
+      setPhase('analyzing');
+      setResults(null);
+      setLoopResult(null);
+      const t0 = performance.now();
+      try {
+        const data = await redTeamApi.runLoop(token, {
+          agent_description:     config.description,
+          uses_mcp:              config.uses_mcp,
+          uses_rag:              config.uses_rag,
+          victim_url:            config.victim_url || undefined,
+          victim_model:          config.victim_model || undefined,
+          max_payloads_per_vuln: config.max_payloads_per_vuln,
+          ceiling:               config.ceiling,
+          discovery_rounds:      config.discovery_rounds,
+          probes_per_round:      config.probes_per_round,
+          use_pair:              config.use_pair,
+          pair_attempts:         config.pair_attempts,
+          refiner_backend:       config.refiner_backend,
+        });
+        setLoopResult(data);
+        setSubmittedDesc(config.description);
+        setDurationSeconds((performance.now() - t0) / 1000);
+        setPhase('results');
+        if (data.stop_reason === 'agent_broken') toast.success('Agent broken — see results.');
+        else if (data.stop_reason === 'ceiling_reached') toast(`Ceiling reached (${data.ceiling} rounds, no FAIL).`);
+        else toast.error(`Loop stopped: ${data.stop_reason}`);
+        refreshSessions(token);
+      } catch (err) {
+        setPhase('input');
+        toast.error(err instanceof Error ? err.message : 'Adaptive loop failed.');
+      }
+      return;
+    }
+    return runAnalysis(analysisApi.buildQuickPayload(config.description, config.uses_mcp, config.uses_rag));
+  }, [runAnalysis, token, refreshSessions]);
 
   const handleExpertAnalyze = useCallback(
     (config: ExpertConfig) => runAnalysis(analysisApi.buildExpertPayload(config)),
@@ -158,327 +253,304 @@ export default function Home() {
   );
 
   // -------------------------------------------------------------------------
-  // Render
+  // Breadcrumb leaf
+  // -------------------------------------------------------------------------
+  const crumbLeaf = phase === 'input' ? 'New Analysis'
+    : phase === 'analyzing' ? 'Analyzing…'
+    : results?.agent_id ?? 'Results';
+
+  // -------------------------------------------------------------------------
+  // Render — unauthenticated
+  // -------------------------------------------------------------------------
+  if (isAuthLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: 'var(--color-bg-base)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-accent)' }} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--color-bg-base)' }}>
+        {/* Simple top bar */}
+        <header style={{
+          height: 64, padding: '0 32px',
+          display: 'flex', alignItems: 'center',
+          background: '#fff', borderBottom: '1px solid var(--color-border)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 30, height: 30, borderRadius: 8,
+              background: 'var(--color-accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Shield size={16} color="#fff" />
+            </div>
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              Agent Security Tester
+            </span>
+          </div>
+        </header>
+
+        <main style={{ maxWidth: 480, margin: '80px auto', padding: '0 24px' }}>
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+              Analyze your AI agent
+            </h1>
+            <p style={{ fontSize: 15, color: '#64748b', marginTop: 10, lineHeight: 1.6 }}>
+              Describe what your agent does and we'll test it against the MAESTRO &amp; ATFAA threat frameworks.
+            </p>
+          </div>
+          <AuthModal onAuthenticated={handleAuthenticated} />
+        </main>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Render — authenticated (app shell)
   // -------------------------------------------------------------------------
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-bg-base)' }}>
-      {/* Background decoration */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        <div className="blob w-96 h-96 top-0 -left-20"  style={{ background: '#06d6a0' }} />
-        <div className="blob w-96 h-96 top-1/3 -right-20" style={{ background: '#0ea5e9', animationDelay: '3s' }} />
-        <div className="blob w-80 h-80 bottom-0 left-1/2" style={{ background: '#a78bfa', animationDelay: '6s' }} />
-      </div>
+    <AppShell
+      user={user}
+      view={view}
+      onView={setView}
+      onNewScan={handleNewScan}
+      onLogout={handleLogout}
+      sessions={sessions}
+      activeSessionId={activeSession}
+      onSession={handleOpenSession}
+      crumbLeaf={crumbLeaf}
+    >
+      {/* ---- Dashboard ---- */}
+      {view === 'dashboard' && <Dashboard token={token} />}
 
-      <Header user={user} onLogout={handleLogout} />
+      {/* ---- Settings ---- */}
+      {view === 'settings' && <Settings user={user} />}
 
-      <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        {/* Auth loading */}
-        {isAuthLoading && (
-          <div className="flex items-center justify-center py-32">
-            <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-accent-green)' }} />
-          </div>
-        )}
+      {/* ---- Workspace ---- */}
+      {view === 'workspace' && (
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: phase === 'input' ? 'column' : 'row',
+          alignItems: phase === 'input' ? 'center' : 'flex-start',
+          justifyContent: phase === 'input' ? 'flex-start' : undefined,
+          gap: 24,
+          padding: phase === 'input' ? '56px 32px 64px' : '24px',
+          maxWidth: phase !== 'input' ? 1180 : undefined,
+          margin: phase !== 'input' ? '0 auto' : undefined,
+          width: '100%',
+        }}>
 
-        {/* Unauthenticated */}
-        {!isAuthLoading && !user && (
-          <div>
-            {/* Hero */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-center mb-12"
-            >
-              <h2 className="text-4xl sm:text-5xl font-bold text-white mb-4 leading-tight">
-                Find vulnerabilities in{' '}
-                <span className="gradient-text">AI agents</span>{' '}
-                before attackers do.
-              </h2>
-              <p className="text-lg max-w-2xl mx-auto" style={{ color: 'var(--color-text-secondary)' }}>
-                Powered by MAESTRO layer decomposition and ATFAA behavioral threat analysis.
-                Supports Quick and Expert scanning modes.
-              </p>
-            </motion.div>
-
-            <AuthModal onAuthenticated={handleAuthenticated} />
-          </div>
-        )}
-
-        {/* Authenticated */}
-        {!isAuthLoading && user && (
-          <>
-            {/* Analysis card */}
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="glass-card p-6"
-            >
-              <div className="mb-5">
-                <h2 className="text-xl font-bold text-white">Security Analysis</h2>
-                <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-                  Choose a mode and describe the AI agent you want to test.
-                </p>
+          {/* Hero — input phase only */}
+          {phase === 'input' && (
+            <div style={{ textAlign: 'center', maxWidth: 560, animation: 'fadeUp .4s ease' }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: 16,
+                background: 'var(--color-accent-soft)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 18px',
+              }}>
+                <Shield size={28} color="var(--color-accent)" />
               </div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+                Analyze your AI agent
+              </div>
+              <div style={{ fontSize: 15, color: '#64748b', marginTop: 10, lineHeight: 1.6 }}>
+                Describe what your agent does and we'll test it against the MAESTRO &amp; ATFAA threat frameworks.
+              </div>
+            </div>
+          )}
 
+          {/* Form card — stays sticky left when in results phase */}
+          <div style={{
+            width: phase === 'input' ? '100%' : 360,
+            maxWidth: phase === 'input' ? 560 : undefined,
+            flexShrink: 0,
+            position: phase === 'results' ? 'sticky' : undefined,
+            top: phase === 'results' ? 80 : undefined,
+          }}>
+            <div style={{
+              background: '#fff',
+              border: '1px solid var(--color-border)',
+              borderRadius: 16,
+              padding: 24,
+              boxShadow: 'var(--shadow-card)',
+            }}>
               <ModeSelector mode={analysisMode} onChange={setAnalysisMode} />
 
-              <AnimatePresence mode="wait">
-                {analysisMode === 'quick' ? (
-                  <motion.div
-                    key="quick"
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 8 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <QuickAnalysis onAnalyze={handleQuickAnalyze} isAnalyzing={isAnalyzing} />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="expert"
-                    initial={{ opacity: 0, x: 8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -8 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <ExpertAnalysis onAnalyze={handleExpertAnalyze} isAnalyzing={isAnalyzing} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-
-            {/* Analysing overlay */}
-            <AnimatePresence>
-              {isAnalyzing && (
-                <motion.div
-                  key="loading"
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.96 }}
-                  className="mt-6 glass-card p-12 flex flex-col items-center gap-5"
-                  style={{ borderColor: 'var(--color-border-accent)' }}
-                >
-                  <div className="relative">
-                    <div className="w-16 h-16 rounded-full animate-glow"
-                         style={{ background: 'radial-gradient(circle, rgba(6,214,160,0.3), transparent)' }} />
-                    <Loader2 className="w-8 h-8 animate-spin absolute top-4 left-4"
-                             style={{ color: 'var(--color-accent-green)' }} />
-                  </div>
-                  <div className="text-center">
-                    <h3 className="text-lg font-semibold text-white">
-                      {analysisMode === 'expert' ? 'Running Expert Analysis…' : 'Running Quick Analysis…'}
-                    </h3>
-                    <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                      Applying MAESTRO & ATFAA frameworks to identify vulnerabilities
-                    </p>
-                  </div>
-                </motion.div>
+              {analysisMode === 'quick' ? (
+                <QuickAnalysis
+                  onAnalyze={handleQuickAnalyze}
+                  isAnalyzing={phase === 'analyzing'}
+                />
+              ) : (
+                <ExpertAnalysis
+                  onAnalyze={handleExpertAnalyze}
+                  isAnalyzing={phase === 'analyzing'}
+                />
               )}
-            </AnimatePresence>
+            </div>
+          </div>
 
-            {/* Results */}
-            <AnimatePresence>
-              {results && !isAnalyzing && !loopResult && (
-                <ResultsDisplay
-                  results={results}
-                  durationSeconds={durationSeconds ?? undefined}
-                  mode={resultMode}
-                  token={token}
-                  agentDescription={submittedDescription}
-                  victimUrl={victimUrl}
-                  victimModel={victimModel}
-                  maxPayloadsPerVuln={maxPayloads}
+          {/* Right panel — analyzing or results */}
+          {phase !== 'input' && (
+            <div style={{ flex: 1, minWidth: 0, animation: 'fadeUp .45s ease' }}>
+              {phase === 'analyzing' && (
+                <AnalyzingPanel
+                  usesMcp={lastConfig?.uses_mcp}
+                  usesRag={lastConfig?.uses_rag}
                 />
               )}
 
-              {loopResult && !isAnalyzing && (
-                <div className="mt-4 glass-card p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-bold text-white">Adaptive Black-Box Loop</h3>
-                      {loopResult.engine?.attack_method === 'PAIR' && (
-                        <span
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                          style={{ background: '#4c1d9544', color: '#c4b5fd' }}
-                          title="PAIR closed-loop refinement: each payload is refined using the victim's reply + judge feedback"
-                        >
-                          PAIR · {loopResult.engine.refiner_backend || 'local'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const blob = new Blob([JSON.stringify(loopResult, null, 2)], { type: 'application/json' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `redteam-loop-${Date.now()}.json`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        }}
-                        className="btn-ghost text-xs py-1 px-3"
-                        title="Download the full audit trail: every discovery probe + reply, synthesized intel, generated payload, and verdict"
-                      >
-                        Download full loop JSON
-                      </button>
-                      <span className="text-xs font-bold px-2 py-1 rounded-full" style={{
-                        background: loopResult.stop_reason === 'agent_broken' ? '#7f1d1d44' : '#33415544',
-                        color:      loopResult.stop_reason === 'agent_broken' ? '#fca5a5'  : '#cbd5e1',
-                      }}>
-                        {loopResult.stop_reason.replace(/_/g,' ').toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                    Discovery probes: {loopResult.recon.probes.length}
-                    {loopResult.discovery && <> across {loopResult.discovery.rounds.length} round{loopResult.discovery.rounds.length === 1 ? '' : 's'}</>} ·
-                    Attack rounds: {loopResult.rounds.length}/{loopResult.ceiling} ·
-                    Duration: {loopResult.duration_seconds.toFixed(1)}s
-                  </p>
-
-                  {/* Black-box discovery — what the agent learned by talking to the victim */}
-                  <div className="rounded-lg p-3" style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.25)' }}>
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-xs uppercase tracking-wide font-semibold" style={{ color: '#c4b5fd' }}>
-                        Black-box discovery
-                      </h4>
-                      {loopResult.discovery && (
-                        <span className="text-[11px] font-mono" style={{ color: '#a78bfa' }}>
-                          confidence {(loopResult.discovery.confidence * 100).toFixed(0)}%
-                          {loopResult.discovery.uses_mcp && ' · MCP'}
-                          {loopResult.discovery.uses_rag && ' · RAG'}
-                        </span>
-                      )}
-                    </div>
-
-                    {loopResult.discovery?.profile && (
-                      <p className="text-xs mb-2 italic" style={{ color: '#ddd6fe' }}>
-                        “{loopResult.discovery.profile}”
-                      </p>
-                    )}
-
-                    {/* Discovered intel chips */}
-                    {loopResult.discovery && (() => {
-                      const di = loopResult.discovery.discovered_intel || {};
-                      const chips: Array<{ k: string; v: string }> = [];
-                      if (di.real_tool_names?.length)         chips.push({ k: 'tools',        v: di.real_tool_names.join(', ') });
-                      if (di.account_id_schema)               chips.push({ k: 'id schema',    v: String(di.account_id_schema) });
-                      if (di.employee_id_schema)              chips.push({ k: 'emp-id schema', v: String(di.employee_id_schema) });
-                      if (di.ticket_id_patterns?.length)      chips.push({ k: 'ticket fmt',   v: di.ticket_id_patterns.join(', ') });
-                      if (di.session_accounts?.length)        chips.push({ k: 'own ids',      v: di.session_accounts.join(', ') });
-                      if (di.other_customer_accounts?.length) chips.push({ k: 'exfil targets', v: di.other_customer_accounts.join(', ') });
-                      if (di.policy_summary)                  chips.push({ k: 'policy',       v: String(di.policy_summary) });
-                      return chips.length ? (
-                        <div className="flex flex-wrap gap-1.5 mb-2">
-                          {chips.map((c, i) => (
-                            <span key={i} className="text-[11px] px-2 py-0.5 rounded-full font-mono"
-                                  style={{ background: 'rgba(255,255,255,0.06)', color: '#e9d5ff', border: '1px solid rgba(255,255,255,0.08)' }}>
-                              <span style={{ color: '#a78bfa' }}>{c.k}:</span> {c.v}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-[11px] mb-2" style={{ color: '#94a3b8' }}>
-                          No structured identifiers extracted — the victim revealed little; payloads fall back to its description.
-                        </p>
-                      );
-                    })()}
-
-                    {loopResult.discovery?.discovered_intel?.promising_attack_angles?.length ? (
-                      <ul className="text-[11px] space-y-0.5 mb-2" style={{ color: '#cbd5e1' }}>
-                        {loopResult.discovery.discovered_intel.promising_attack_angles.slice(0, 5).map((a, i) => (
-                          <li key={i}>↳ {a}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-
-                    {/* Per-round probe/reply transcript */}
-                    {loopResult.discovery?.rounds.map((rd) => (
-                      <details key={rd.round} className="mt-1.5">
-                        <summary className="text-[11px] cursor-pointer select-none" style={{ color: '#a78bfa' }}>
-                          Round {rd.round}: {rd.probes.length} probe{rd.probes.length === 1 ? '' : 's'}
-                          {' '}· conf {(rd.confidence * 100).toFixed(0)}%{rd.enough ? ' · sufficient' : ''}
-                        </summary>
-                        <div className="mt-1.5 space-y-1.5 pl-3">
-                          {rd.probes.map((p, i) => (
-                            <div key={i} className="text-[11px]">
-                              <p style={{ color: '#93c5fd' }}><span className="font-semibold">Q:</span> {p.probe}</p>
-                              <p style={{ color: '#cbd5e1' }}><span className="font-semibold" style={{ color: '#6ee7b7' }}>A:</span> {p.reply.slice(0, 400)}{p.reply.length > 400 ? '…' : ''}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    ))}
-
-                    {/* Fallback when discovery object absent (older backend) */}
-                    {!loopResult.discovery && (
-                      <ul className="text-xs space-y-1" style={{ color: '#cbd5e1' }}>
-                        {loopResult.recon.learnings.map((l, i) => <li key={i}>{l}</li>)}
-                      </ul>
-                    )}
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs uppercase tracking-wide font-semibold mb-2" style={{ color: '#94a3b8' }}>
-                      Rounds
-                    </h4>
-                    <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
-                      <table className="w-full text-xs">
-                        <thead style={{ background: 'rgba(255,255,255,0.04)', color: '#94a3b8' }}>
-                          <tr>
-                            <th className="text-left p-2">Round</th>
-                            <th className="text-right p-2">Tested</th>
-                            <th className="text-right p-2" style={{ color: '#6ee7b7' }}>Refused</th>
-                            <th className="text-right p-2" style={{ color: '#fca5a5' }}>Complied</th>
-                            <th className="text-right p-2">Unknown</th>
-                            <th className="text-right p-2">Time</th>
-                            <th className="text-center p-2">Broken?</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {loopResult.rounds.map(r => (
-                            <tr key={r.round} style={{ borderTop: '1px solid var(--color-border)' }}>
-                              <td className="p-2 font-mono">{r.round}</td>
-                              <td className="p-2 text-right">{r.tested}</td>
-                              <td className="p-2 text-right" style={{ color: '#6ee7b7' }}>{r.refused}</td>
-                              <td className="p-2 text-right" style={{ color: '#fca5a5' }}>{r.complied}</td>
-                              <td className="p-2 text-right" style={{ color: '#94a3b8' }}>{r.unknown}</td>
-                              <td className="p-2 text-right">{r.duration_seconds.toFixed(1)}s</td>
-                              <td className="p-2 text-center">{r.broken ? '🟥 yes' : '✅ no'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {loopResult.analysis && loopResult.evaluation && (
+              {phase === 'results' && (
+                <>
+                  {results && !loopResult && (
                     <ResultsDisplay
-                      results={loopResult.analysis}
-                      mode="quick"
-                      durationSeconds={loopResult.duration_seconds}
+                      results={results}
+                      durationSeconds={durationSeconds ?? undefined}
+                      mode={resultMode}
                       token={token}
-                      agentDescription={submittedDescription}
+                      agentDescription={submittedDesc}
                       victimUrl={victimUrl}
                       victimModel={victimModel}
                       maxPayloadsPerVuln={maxPayloads}
-                      precomputedPayloads={loopResult.payloads}
-                      precomputedEval={loopResult.evaluation}
                     />
                   )}
-                </div>
-              )}
-            </AnimatePresence>
-          </>
-        )}
-      </main>
 
-      <footer className="relative z-10 border-t mt-20 py-6 text-center text-xs"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
-        AI Agent Security Tester · MAESTRO & ATFAA Frameworks · {new Date().getFullYear()}
-      </footer>
-    </div>
+                  {loopResult && (
+                    <div className="space-y-4">
+                      {/* Adaptive-loop header */}
+                      <div style={{
+                        background: '#fff', border: '1px solid var(--color-border)',
+                        borderRadius: 14, padding: 20,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
+                              Adaptive Black-Box Loop
+                            </h3>
+                            {loopResult.engine?.attack_method === 'PAIR' && (
+                              <span style={{
+                                fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 9999,
+                                background: '#f5f3ff', color: '#7c3aed',
+                              }}>
+                                PAIR · {loopResult.engine.refiner_backend || 'local'}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <button
+                              onClick={() => {
+                                const blob = new Blob([JSON.stringify(loopResult, null, 2)], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url; a.download = `redteam-loop-${Date.now()}.json`; a.click();
+                                URL.revokeObjectURL(url);
+                              }}
+                              className="btn-ghost"
+                            >
+                              Download JSON
+                            </button>
+                            <span style={{
+                              fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 9999,
+                              background: loopResult.stop_reason === 'agent_broken' ? 'var(--color-critical-bg)' : '#f8fafc',
+                              color:      loopResult.stop_reason === 'agent_broken' ? 'var(--color-critical)' : '#64748b',
+                            }}>
+                              {loopResult.stop_reason.replace(/_/g, ' ').toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                        <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                          Discovery probes: {loopResult.recon.probes.length}
+                          {loopResult.discovery && <> across {loopResult.discovery.rounds.length} round{loopResult.discovery.rounds.length === 1 ? '' : 's'}</>} ·
+                          Attack rounds: {loopResult.rounds.length}/{loopResult.ceiling} ·
+                          Duration: {loopResult.duration_seconds.toFixed(1)}s
+                        </p>
+                      </div>
+
+                      {/* Discovery */}
+                      <div style={{
+                        borderRadius: 12, padding: 16,
+                        background: '#faf5ff', border: '1px solid #e9d5ff',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <h4 style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#7c3aed', margin: 0 }}>
+                            Black-box discovery
+                          </h4>
+                          {loopResult.discovery && (
+                            <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#a78bfa' }}>
+                              confidence {(loopResult.discovery.confidence * 100).toFixed(0)}%
+                              {loopResult.discovery.uses_mcp && ' · MCP'}
+                              {loopResult.discovery.uses_rag && ' · RAG'}
+                            </span>
+                          )}
+                        </div>
+                        {loopResult.discovery?.profile && (
+                          <p style={{ fontSize: 12, fontStyle: 'italic', color: '#6d28d9', marginBottom: 8 }}>
+                            "{loopResult.discovery.profile}"
+                          </p>
+                        )}
+                        {!loopResult.discovery && (
+                          <ul style={{ fontSize: 12, color: '#475569', margin: 0, paddingLeft: 16 }}>
+                            {loopResult.recon.learnings.map((l, i) => <li key={i}>{l}</li>)}
+                          </ul>
+                        )}
+                      </div>
+
+                      {/* Rounds table */}
+                      <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: 12, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--color-bg-base)', color: '#94a3b8' }}>
+                              {['Round','Tested','Refused','Complied','Unknown','Time','Broken?'].map(h => (
+                                <th key={h} style={{ textAlign: h === 'Round' ? 'left' : 'right', padding: '10px 12px', fontWeight: 600 }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {loopResult.rounds.map(r => (
+                              <tr key={r.round} style={{ borderTop: '1px solid var(--color-border)' }}>
+                                <td style={{ padding: '10px 12px', fontFamily: 'monospace' }}>{r.round}</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'right' }}>{r.tested}</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-success)' }}>{r.refused}</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-critical)' }}>{r.complied}</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'right', color: '#94a3b8' }}>{r.unknown}</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'right' }}>{r.duration_seconds.toFixed(1)}s</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'center' }}>{r.broken ? '🟥 yes' : '✅ no'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {loopResult.analysis && loopResult.evaluation && (
+                        <ResultsDisplay
+                          results={loopResult.analysis}
+                          mode="quick"
+                          durationSeconds={loopResult.duration_seconds}
+                          token={token}
+                          agentDescription={submittedDesc}
+                          victimUrl={victimUrl}
+                          victimModel={victimModel}
+                          maxPayloadsPerVuln={maxPayloads}
+                          precomputedPayloads={loopResult.payloads}
+                          precomputedEval={loopResult.evaluation}
+                        />
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </AppShell>
   );
 }

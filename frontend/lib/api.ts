@@ -22,6 +22,7 @@ import type {
   AuthResponse,
   UserProfile,
   MissionFile,
+  ScanRecord,
   ScanHistoryResponse,
   ExpertConfig,
   AnalysisMode,
@@ -171,6 +172,16 @@ export const scansApi = {
       credentials: 'include',
     });
     return handleResponse<ScanHistoryResponse>(res);
+  },
+
+  async getById(id: string, token?: string): Promise<ScanRecord> {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/api/scans/${id}`, {
+      headers,
+      credentials: 'include',
+    });
+    return handleResponse<ScanRecord>(res);
   },
 };
 

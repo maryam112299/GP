@@ -161,7 +161,7 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
         {/* Victim wiring — works for any future target ----------------------- */}
         <div
           className="rounded-lg px-4 py-3 space-y-2"
-          style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}
+          style={{ background: 'var(--color-bg-base)', border: '1px solid var(--color-border)' }}
         >
           <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: 'var(--color-text-muted)' }}>
             <Target size={12} />
@@ -196,7 +196,7 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
         {/* Attack-strength slider --------------------------------------------- */}
         <div
           className="rounded-lg px-4 py-3"
-          style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}
+          style={{ background: 'var(--color-bg-base)', border: '1px solid var(--color-border)' }}
         >
           <div className="flex items-center justify-between mb-1.5">
             <p className="text-xs font-medium flex items-center gap-1.5"
@@ -204,7 +204,7 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
               <Sliders size={12} />
               Attack strength
             </p>
-            <span className="text-xs font-semibold" style={{ color: '#06d6a0' }}>
+            <span className="text-xs font-semibold" style={{ color: 'var(--color-accent)' }}>
               {strengthLabel} · {maxPayloads} payload{maxPayloads === 1 ? '' : 's'} per vulnerability
             </span>
           </div>
@@ -216,7 +216,7 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
             value={maxPayloads}
             onChange={(e) => setMaxPayloads(Number(e.target.value))}
             disabled={isAnalyzing}
-            className="w-full accent-green-400"
+            className="w-full accent-[#4f46e5]"
           />
           <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-muted)' }}>
             Higher values send more payloads per vulnerability, taking longer but giving a more
@@ -227,7 +227,7 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
         {/* Adaptive red-team loop -------------------------------------------- */}
         <div
           className="rounded-lg px-4 py-3"
-          style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}
+          style={{ background: 'var(--color-bg-base)', border: '1px solid var(--color-border)' }}
         >
           <label className="flex items-center gap-2.5 cursor-pointer group mb-1">
             <input
@@ -235,9 +235,9 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
               checked={adaptiveLoop}
               onChange={(e) => setAdaptiveLoop(e.target.checked)}
               disabled={isAnalyzing}
-              className="w-4 h-4 rounded accent-purple-400"
+              className="w-4 h-4 rounded accent-[#4f46e5]"
             />
-            <span className="text-sm text-white font-semibold">
+            <span className="text-sm text-[#0f172a] font-semibold">
               Adaptive black-box loop
             </span>
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
@@ -304,9 +304,9 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
                     checked={usePair}
                     onChange={(e) => setUsePair(e.target.checked)}
                     disabled={isAnalyzing}
-                    className="w-4 h-4 rounded accent-purple-400"
+                    className="w-4 h-4 rounded accent-[#4f46e5]"
                   />
-                  <span className="text-sm text-white font-semibold">PAIR refinement</span>
+                  <span className="text-sm text-[#0f172a] font-semibold">PAIR refinement</span>
                   <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                     — seed → inject → judge → refine each payload using the victim&apos;s reply
                   </span>
@@ -363,7 +363,7 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
         </div>
 
         {/* Technology checkboxes --------------------------------------------- */}
-        <div className="rounded-lg px-4 py-3 space-y-2" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}>
+        <div className="rounded-lg px-4 py-3 space-y-2" style={{ background: 'var(--color-bg-base)', border: '1px solid var(--color-border)' }}>
           <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
             Does your agent use any of the following?
           </p>
@@ -373,9 +373,9 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
               checked={usesMcp}
               onChange={(e) => setUsesMcp(e.target.checked)}
               disabled={isAnalyzing}
-              className="w-4 h-4 rounded accent-green-400"
+              className="w-4 h-4 rounded accent-[#4f46e5]"
             />
-            <span className="text-sm text-white group-hover:opacity-80 transition-opacity">
+            <span className="text-sm text-[#0f172a] group-hover:opacity-80 transition-opacity">
               MCP tools / servers
             </span>
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
@@ -388,9 +388,9 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
               checked={usesRag}
               onChange={(e) => setUsesRag(e.target.checked)}
               disabled={isAnalyzing}
-              className="w-4 h-4 rounded accent-green-400"
+              className="w-4 h-4 rounded accent-[#4f46e5]"
             />
-            <span className="text-sm text-white group-hover:opacity-80 transition-opacity">
+            <span className="text-sm text-[#0f172a] group-hover:opacity-80 transition-opacity">
               RAG / knowledge base
             </span>
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
@@ -420,9 +420,9 @@ export default function QuickAnalysis({ onAnalyze, isAnalyzing }: QuickAnalysisP
           { label: 'Camouflage',   value: 'scope-aware' },
           { label: 'Est. time',    value: '~1–5 min' },
         ].map((item) => (
-          <div key={item.label} className="rounded-lg p-2.5 text-center" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}>
+          <div key={item.label} className="rounded-lg p-2.5 text-center" style={{ background: 'var(--color-bg-base)', border: '1px solid var(--color-border)' }}>
             <p className="text-xs mb-0.5" style={{ color: 'var(--color-text-muted)' }}>{item.label}</p>
-            <p className="text-xs font-semibold text-white">{item.value}</p>
+            <p className="text-xs font-semibold text-[#0f172a]">{item.value}</p>
           </div>
         ))}
       </div>

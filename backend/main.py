@@ -63,6 +63,7 @@ from db import (
     update_user_profile,
     create_analysis_record,
     get_analyses_by_user_id,
+    get_analysis_by_id,
 )
 from auth import hash_password, verify_password, create_access_token, decode_access_token
 
@@ -296,6 +297,14 @@ async def edit_profile(
 async def get_user_scans(current_user: dict = Depends(get_current_user)):
     scans = get_analyses_by_user_id(current_user["id"])
     return ScanHistoryResponse(scans=scans)
+
+
+@app.get("/api/scans/{scan_id}", tags=["scans"])
+async def get_single_scan(scan_id: int, current_user: dict = Depends(get_current_user)):
+    scan = get_analysis_by_id(scan_id, current_user["id"])
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return scan
 
 
 # ---------------------------------------------------------------------------

@@ -30,22 +30,23 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${outfit.variable} ${jetbrainsMono.variable}`}>
-      <body style={{ fontFamily: 'var(--font-outfit), system-ui, sans-serif' }}>
+    <html lang="en" className={`${outfit.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <body style={{ fontFamily: 'var(--font-outfit), system-ui, sans-serif' }} suppressHydrationWarning>
         {children}
         <Toaster
           position="top-right"
           toastOptions={{
             duration: 4000,
             style: {
-              background: '#161b24',
-              color: '#f0f6fc',
-              border: '1px solid rgba(255,255,255,0.08)',
+              background: '#ffffff',
+              color: '#0f172a',
+              border: '1px solid #e5e7eb',
               borderRadius: '10px',
               fontSize: '0.875rem',
+              boxShadow: '0 4px 12px rgba(15,23,42,0.1)',
             },
-            success: { iconTheme: { primary: '#06d6a0', secondary: '#fff' } },
-            error:   { iconTheme: { primary: '#f85149', secondary: '#fff' } },
+            success: { iconTheme: { primary: '#16a34a', secondary: '#fff' } },
+            error:   { iconTheme: { primary: '#dc2626', secondary: '#fff' } },
           }}
         />
       </body>
