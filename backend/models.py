@@ -1,0 +1,325 @@
+from enum import Enum
+from typing import List, Optional
+from pydantic import BaseModel, Field, EmailStr
+
+
+# ---------------------------------------------------------------------------
+# Framework Enumerations (MAESTRO & ATFAA)
+# ---------------------------------------------------------------------------
+
+class MaestroLayer(str, Enum):
+    FOUNDATION_MODEL = "Foundation Model"
+    DATA_OPS = "Data Operations"
+    AGENT_FRAMEWORK = "Agent Framework"
+    INFRASTRUCTURE = "Infrastructure"
+    SECURITY = "Security & Compliance"
+    AGENT_ECOSYSTEM = "Agent Ecosystem"
+
+
+class AtfaaThreat(str, Enum):
+    COGNITIVE = "Cognitive Architecture"       # Goal drift
+    PERSISTENCE = "Temporal Persistence"       # Memory poisoning
+    EXECUTION = "Operational Execution"        # Tool abuse / unauthorized data
+    BOUNDARY = "Trust Boundary Violation"      # Untrusted input processing
+    GOVERNANCE = "Governance Circumvention"    # Bypassing oversight
+
+
+class InjectionType(str, Enum):
+    DIRECT = "Direct (User Prompt)"
+    INDIRECT = "Indirect (Data Source/File/PDF)"
+    MULTI_TURN = "Multi-turn (Conversation History)"
+
+
+class AnalysisMode(str, Enum):
+    QUICK = "quick"
+    EXPERT = "expert"
+
+
+# ---------------------------------------------------------------------------
+# Vulnerability scope categories (used by Expert Mode)
+# ---------------------------------------------------------------------------
+
+class VulnScope(str, Enum):
+    # --- Direct attacks ---
+    PROMPT_INJECTION_DIRECT = "Prompt Injection (Direct)"
+    SYSTEM_PROMPT_LEAK = "System Prompt Leak"
+    RCE = "RCE / Command Injection"
+    SQLI = "SQL Injection"
+    SSRF = "SSRF"
+    ACCESS_CONTROL = "Access Control (RBAC)"
+
+    # --- Indirect attacks ---
+    PROMPT_INJECTION_INDIRECT = "Prompt Injection (Indirect)"
+    PDF_LFI = "Insecure PDF / LFI"
+    DATA_EXFIL = "Indirect Data Exfiltration"
+
+    # --- Multi-turn attacks ---
+    MULTITURN_INJECTION = "Multi-turn Prompt Injection"
+    MEMORY_POISONING = "Memory / Context Poisoning"
+
+    # --- MCP attacks (only surfaced when uses_mcp=True) ---
+    MCP_TOOL_POISONING = "MCP Tool Poisoning"
+    MCP_EXCESSIVE_PERMISSIONS = "MCP Excessive Permissions"
+    MCP_MISSING_AUTH = "MCP Missing Authentication"
+    MCP_TOOL_SHADOWING = "MCP Tool Shadowing"
+    MCP_RUG_PULL = "MCP Rug Pull (Post-Approval Mutation)"
+    MCP_INSECURE_TRANSPORT = "MCP Insecure Transport"
+    MCP_CROSS_AGENT = "MCP Cross-Agent Tool Invocation"
+
+    # --- RAG attacks (only surfaced when uses_rag=True) ---
+    RAG_KB_INJECTION = "RAG Knowledge Base Injection"
+    RAG_INDIRECT_INJECTION = "RAG Indirect Prompt Injection"
+    RAG_CROSS_TENANT = "RAG Cross-Tenant Data Leakage"
+    RAG_RETRIEVAL_BYPASS = "RAG Retrieval Bypass"
+    RAG_CONTEXT_STUFFING = "RAG Context Window Stuffing"
+    RAG_EMBEDDING_INVERSION = "RAG Embedding Inversion"
+
+
+# ---------------------------------------------------------------------------
+# Core Analysis Models
+# ---------------------------------------------------------------------------
+
+class AttackObjective(BaseModel):
+    vulnerability_type: str = Field(description="e.g., Data Exfiltration, Tool Hijacking, SQLi")
+    priority: str = Field(description="CRITICAL, HIGH, MEDIUM, or LOW")
+    severity: float = Field(default=0.0, description="Computed severity score 0.0–10.0")
+    maestro_layer: MaestroLayer
+    atfaa_domain: AtfaaThreat
+    injection_type: InjectionType
+    target_asset: str = Field(description="The specific tool or API being targeted")
+    exploit_strategy: str = Field(description="How the attack is executed")
+    adversarial_objective: str = Field(description="The adversary's end goal")
+    # v3 fix — scope-aware camouflage instruction for the payload generator
+    required_camouflage: str = Field(
+        default="NONE",
+        description="One-sentence camouflage instruction; 'NONE' when scope_lock_strength is NONE",
+    )
+
+
+class MissionFile(BaseModel):
+    agent_id: str
+    risk_summary: str
+    attack_plan: List[AttackObjective]
+    # v3 fix — scope lock metadata used by the payload generator
+    allowed_scope:        str = Field(default="general", description="What topics/actions the agent will engage with")
+    scope_lock_strength:  str = Field(default="NONE",    description="STRICT | LOOSE | NONE")
+
+
+# ---------------------------------------------------------------------------
+# Analysis Request Models
+# ---------------------------------------------------------------------------
+
+class QuickAnalysisRequest(BaseModel):
+    """Minimal input — backend infers defaults and uses a concise prompt."""
+    mode: AnalysisMode = AnalysisMode.QUICK
+    agent_description: str = Field(
+        min_length=10,
+        description="Brief description of the AI agent to analyse",
+    )
+    uses_mcp: bool = Field(default=False, description="Agent uses MCP tools/servers")
+    uses_rag: bool = Field(default=False, description="Agent uses a RAG / knowledge base")
+
+
+class ExpertAnalysisRequest(BaseModel):
+    """Full structured input for a deep, scope-controlled security analysis."""
+    mode: AnalysisMode = AnalysisMode.EXPERT
+    agent_name: str = Field(min_length=1, max_length=200, description="Name of the agent")
+    mission: str = Field(min_length=5, description="Agent's primary mission / goal")
+    tools: List[str] = Field(default_factory=list, description="Tools available to the agent")
+    data_sources: List[str] = Field(default_factory=list, description="Data the agent consumes")
+    architecture_notes: Optional[str] = Field(
+        default="",
+        description="Additional architecture context (APIs, external services, DBs, etc.)",
+    )
+    scope: List[VulnScope] = Field(
+        default_factory=list,
+        description="Vulnerability categories to focus on (empty = all)",
+    )
+    uses_mcp: bool = Field(default=False, description="Agent uses MCP tools/servers")
+    uses_rag: bool = Field(default=False, description="Agent uses a RAG / knowledge base")
+
+
+class AnalysisRequest(BaseModel):
+    """Union request — accepts either mode. Frontend should send one of the sub-types."""
+    mode: AnalysisMode = AnalysisMode.QUICK
+    agent_description: str = Field(description="Full agent description (assembled by frontend or backend)")
+    uses_mcp: bool = Field(default=False, description="Agent uses MCP tools/servers")
+    uses_rag: bool = Field(default=False, description="Agent uses a RAG / knowledge base")
+    # Expert fields (optional)
+    agent_name: Optional[str] = None
+    mission: Optional[str] = None
+    tools: Optional[List[str]] = None
+    data_sources: Optional[List[str]] = None
+    architecture_notes: Optional[str] = None
+    scope: Optional[List[VulnScope]] = None
+
+
+# ---------------------------------------------------------------------------
+# Scan History Models
+# ---------------------------------------------------------------------------
+
+class ScanRecord(BaseModel):
+    id: int
+    input_text: str
+    output: "AnalysisResponse"
+    duration_seconds: float
+    created_at: str
+    mode: AnalysisMode = AnalysisMode.QUICK
+
+
+class ScanHistoryResponse(BaseModel):
+    scans: List[ScanRecord]
+
+
+# ---------------------------------------------------------------------------
+# Auth & Profile Models
+# ---------------------------------------------------------------------------
+
+class SignupRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+    full_name: str = Field(min_length=2, max_length=100)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserProfile(BaseModel):
+    id: str
+    email: EmailStr
+    first_name: str
+    last_name: str
+    mobile_number: str
+    company_name: str
+    job_role: str
+    country: str
+
+
+class UpdateProfileRequest(BaseModel):
+    first_name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    last_name: Optional[str] = Field(default="", max_length=100)
+    mobile_number: Optional[str] = Field(default="", max_length=30)
+    company_name: Optional[str] = Field(default="", max_length=150)
+    job_role: Optional[str] = Field(default="", max_length=100)
+    country: Optional[str] = Field(default="", max_length=100)
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserProfile
+
+
+class AnalysisResponse(BaseModel):
+    agent_id: str
+    risk_summary: str
+    attack_plan: List[AttackObjective]
+
+
+# ---------------------------------------------------------------------------
+# Payload Generation Models
+# ---------------------------------------------------------------------------
+
+class PayloadResult(BaseModel):
+    vulnerability_type: str
+    target_asset: str
+    payloads: List[str]         # model-generated specific payloads (up to 5)
+    generic_payloads: List[str] # generic payloads from benchmark dataset
+    applicable: bool            # True if at least one specific payload was generated
+
+
+class GeneratePayloadsRequest(BaseModel):
+    agent_description: str = Field(min_length=5)
+    analysis: MissionFile
+    max_payloads_per_vuln: Optional[int] = Field(
+        default=None, ge=1, le=20,
+        description="How many specific payloads to generate per vulnerability. Falls back to MAX_PAYLOADS_PER_VULN env.",
+    )
+    victim_url: Optional[str] = Field(
+        default=None,
+        description="Optional victim base URL — used to fetch /sensitive attack_intel so payloads use real schema.",
+    )
+
+
+class GeneratePayloadsResponse(BaseModel):
+    payloads: List[PayloadResult]
+    applicable_count: int
+    total_count: int
+
+
+# ---------------------------------------------------------------------------
+# Attack Simulation / Evaluation Models
+# ---------------------------------------------------------------------------
+
+class PayloadEvalResult(BaseModel):
+    payload: str
+    payload_type: str        # "specific" | "generic"
+    victim_response: str
+    result: str              # "SUCCESS" | "FAIL" | "UNKNOWN"
+    eval_method: str         # "rule-based" | "soft-fail" | "semantic" | "nli" | "llm" | "outcome-*"
+    evidence: Optional[List[dict]] = None   # outcome-based findings (when manifest available)
+
+
+class VulnEvalSummary(BaseModel):
+    vulnerability_type: str
+    target_asset: str
+    total: int
+    success_count: int       # refused → safe
+    fail_count: int          # complied → vulnerable
+    unknown_count: int
+    risk_score: float        # 0.0 = fully safe, 1.0 = fully vulnerable
+    payload_results: List[PayloadEvalResult]
+
+
+class EvaluateRequest(BaseModel):
+    payloads: List[PayloadResult]
+    # Optional per-scan overrides — let the UI target any victim and dial
+    # the attack strength up or down without restarting the backend.
+    victim_url:            Optional[str] = Field(default=None, description="Victim endpoint base URL. Falls back to VICTIM_BASE_URL env.")
+    victim_model:          Optional[str] = Field(default=None, description="Victim model name passed to /api/generate. Falls back to VICTIM_MODEL env.")
+    max_payloads_per_vuln: Optional[int] = Field(default=None, ge=1, le=20, description="How many payloads to send per vulnerability (specific + generic combined).")
+
+
+class EvaluateResponse(BaseModel):
+    vuln_summaries: List[VulnEvalSummary]
+    overall_risk_score: float
+    total_tested: int
+    total_success: int
+    total_fail: int
+    total_unknown: int
+
+
+# ---------------------------------------------------------------------------
+# Report Generation Models
+# ---------------------------------------------------------------------------
+
+class RedTeamLoopRequest(BaseModel):
+    """Kicks off the agentic red-team loop: discover → plan → generate → evaluate → repeat."""
+    agent_description:     str  = Field(min_length=10)
+    uses_mcp:              bool = False
+    uses_rag:              bool = False
+    victim_url:            Optional[str] = None
+    victim_model:          Optional[str] = None
+    max_payloads_per_vuln: int  = Field(default=5, ge=1, le=20)
+    ceiling:               int  = Field(default=3, ge=1, le=10, description="Max number of generate→evaluate rounds")
+    discovery_rounds:      int  = Field(default=3, ge=1, le=6, description="Max iterative black-box recon rounds")
+    probes_per_round:      int  = Field(default=4, ge=1, le=8, description="Discovery probes sent per round")
+    use_pair:              bool = Field(default=True, description="Use PAIR closed-loop refinement (seed→inject→judge→refine)")
+    pair_attempts:         int  = Field(default=4, ge=1, le=8, description="Max PAIR refinement attempts per attack goal")
+    refiner_backend:       Optional[str] = Field(default=None, description="Attacker/refiner LLM backend: local | groq | anthropic (overrides REFINER_BACKEND env)")
+
+
+class ReportRequest(BaseModel):
+    """Everything needed to render the PDF security report."""
+    analysis: MissionFile                  # agent_id, risk_summary, attack_plan
+    evaluation: EvaluateResponse           # vuln_summaries + aggregate counters
+    mode: AnalysisMode = AnalysisMode.QUICK
+    agent_description: str = Field(default="", description="Original agent description")
+    duration_seconds: float = Field(default=0.0, description="Wall-clock time for the full pipeline")
+
+
+# Resolve forward reference
+ScanRecord.model_rebuild()

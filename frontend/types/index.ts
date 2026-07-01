@@ -1,0 +1,237 @@
+export enum MaestroLayer {
+  FOUNDATION_MODEL = 'Foundation Model',
+  DATA_OPS         = 'Data Operations',
+  AGENT_FRAMEWORK  = 'Agent Framework',
+  INFRASTRUCTURE   = 'Infrastructure',
+  SECURITY         = 'Security & Compliance',
+  AGENT_ECOSYSTEM  = 'Agent Ecosystem',
+}
+
+export enum AtfaaThreat {
+  COGNITIVE   = 'Cognitive Architecture',
+  PERSISTENCE = 'Temporal Persistence',
+  EXECUTION   = 'Operational Execution',
+  BOUNDARY    = 'Trust Boundary Violation',
+  GOVERNANCE  = 'Governance Circumvention',
+}
+
+export enum InjectionType {
+  DIRECT     = 'Direct (User Prompt)',
+  INDIRECT   = 'Indirect (Data Source/File/PDF)',
+  MULTI_TURN = 'Multi-turn (Conversation History)',
+}
+
+export type AnalysisMode = 'quick' | 'expert';
+
+// Direct attack options (always shown)
+export const VULN_SCOPE_DIRECT = [
+  'Prompt Injection (Direct)',
+  'System Prompt Leak',
+  'RCE / Command Injection',
+  'SQL Injection',
+  'SSRF',
+  'Access Control (RBAC)',
+] as const;
+
+// Indirect attack options (always shown)
+export const VULN_SCOPE_INDIRECT = [
+  'Prompt Injection (Indirect)',
+  'Insecure PDF / LFI',
+  'Indirect Data Exfiltration',
+] as const;
+
+// Multi-turn attack options (always shown)
+export const VULN_SCOPE_MULTITURN = [
+  'Multi-turn Prompt Injection',
+  'Memory / Context Poisoning',
+] as const;
+
+// MCP attack options (shown only when uses_mcp=true)
+export const VULN_SCOPE_MCP = [
+  'MCP Tool Poisoning',
+  'MCP Excessive Permissions',
+  'MCP Missing Authentication',
+  'MCP Tool Shadowing',
+  'MCP Rug Pull (Post-Approval Mutation)',
+  'MCP Insecure Transport',
+  'MCP Cross-Agent Tool Invocation',
+] as const;
+
+// RAG attack options (shown only when uses_rag=true)
+export const VULN_SCOPE_RAG = [
+  'RAG Knowledge Base Injection',
+  'RAG Indirect Prompt Injection',
+  'RAG Cross-Tenant Data Leakage',
+  'RAG Retrieval Bypass',
+  'RAG Context Window Stuffing',
+  'RAG Embedding Inversion',
+] as const;
+
+export const VULN_SCOPE_OPTIONS = [
+  ...VULN_SCOPE_DIRECT,
+  ...VULN_SCOPE_INDIRECT,
+  ...VULN_SCOPE_MULTITURN,
+  ...VULN_SCOPE_MCP,
+  ...VULN_SCOPE_RAG,
+] as const;
+
+export type VulnScope = (typeof VULN_SCOPE_OPTIONS)[number];
+
+// ---------------------------------------------------------------------------
+// Attack / Mission types
+// ---------------------------------------------------------------------------
+
+export interface AttackObjective {
+  vulnerability_type: string;
+  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  severity: number;
+  maestro_layer: MaestroLayer;
+  atfaa_domain: AtfaaThreat;
+  injection_type: InjectionType;
+  target_asset: string;
+  exploit_strategy: string;
+  adversarial_objective: string;
+  // v3 — analyzer-emitted camouflage instruction for the payload generator
+  required_camouflage?: string;
+}
+
+export type ScopeLockStrength = 'STRICT' | 'LOOSE' | 'NONE';
+
+export interface MissionFile {
+  agent_id: string;
+  risk_summary: string;
+  attack_plan: AttackObjective[];
+  // v3 — extracted by the analyzer; threaded into the payload generator
+  allowed_scope?: string;
+  scope_lock_strength?: ScopeLockStrength;
+}
+
+export interface AnalysisResponse {
+  agent_id: string;
+  risk_summary: string;
+  attack_plan: AttackObjective[];
+}
+
+// ---------------------------------------------------------------------------
+// Expert mode config
+// ---------------------------------------------------------------------------
+
+export interface ExpertConfig {
+  agent_name: string;
+  mission: string;
+  tools: string[];
+  data_sources: string[];
+  architecture_notes: string;
+  scope: VulnScope[];
+  agent_description: string;
+  uses_mcp: boolean;
+  uses_rag: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Auth / profile types
+// ---------------------------------------------------------------------------
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  mobile_number: string;
+  company_name: string;
+  job_role: string;
+  country: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: UserProfile;
+}
+
+// ---------------------------------------------------------------------------
+// Scan history types
+// ---------------------------------------------------------------------------
+
+export interface ScanRecord {
+  id: number;
+  input_text: string;
+  output: MissionFile;
+  duration_seconds: number;
+  created_at: string;
+  mode: AnalysisMode;
+}
+
+export interface ScanHistoryResponse {
+  scans: ScanRecord[];
+}
+
+// ---------------------------------------------------------------------------
+// Payload generation types
+// ---------------------------------------------------------------------------
+
+export interface PayloadResult {
+  vulnerability_type: string;
+  target_asset: string;
+  payloads: string[];          // model-generated specific payloads
+  generic_payloads: string[];  // generic payloads from benchmark dataset
+  applicable: boolean;
+}
+
+export interface GeneratePayloadsResponse {
+  payloads: PayloadResult[];
+  applicable_count: number;
+  total_count: number;
+}
+
+// ---------------------------------------------------------------------------
+// Attack simulation / evaluation types
+// ---------------------------------------------------------------------------
+
+export interface PayloadEvidence {
+  kind: string;
+  [k: string]: unknown;
+}
+
+export interface PayloadEvalResult {
+  payload: string;
+  payload_type: 'specific' | 'generic';
+  victim_response: string;
+  result: 'SUCCESS' | 'FAIL' | 'UNKNOWN';
+  eval_method: string;
+  evidence?: PayloadEvidence[];
+}
+
+export interface VulnEvalSummary {
+  vulnerability_type: string;
+  target_asset: string;
+  total: number;
+  success_count: number;
+  fail_count: number;
+  unknown_count: number;
+  risk_score: number;        // 0.0 = safe, 1.0 = fully vulnerable
+  payload_results: PayloadEvalResult[];
+}
+
+export interface EvaluateResponse {
+  vuln_summaries: VulnEvalSummary[];
+  overall_risk_score: number;
+  total_tested: number;
+  total_success: number;
+  total_fail: number;
+  total_unknown: number;
+}
+
+// ---------------------------------------------------------------------------
+// System-info (which models drove this scan)
+// ---------------------------------------------------------------------------
+
+export interface SystemInfo {
+  analyzer_model:  string;
+  analyzer_url:    string;
+  generator_model: string;
+  victim_model:    string;
+  victim_url:      string;
+  evaluator_model: string;
+  scoring_mode:    string;
+}

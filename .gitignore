@@ -1,0 +1,68 @@
+# -----------------------------------------------------------------------
+# Frontend (Next.js / Node)
+# -----------------------------------------------------------------------
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+frontend/package-lock.json
+frontend/yarn.lock
+frontend/pnpm-lock.yaml
+
+# -----------------------------------------------------------------------
+# Backend (Python)
+# -----------------------------------------------------------------------
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.Python
+backend/*.db
+backend/mission_file.json
+backend/mission_file_*.json
+
+# -----------------------------------------------------------------------
+# Environment / secrets
+# -----------------------------------------------------------------------
+.env
+.env.local
+.env.production
+.env.development
+frontend/.env
+backend/.env
+
+# -----------------------------------------------------------------------
+# IDE & OS
+# -----------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# -----------------------------------------------------------------------
+# Logs / coverage
+# -----------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage/
+.coverage
+*.cover
+node_modules
+
+# -----------------------------------------------------------------------
+# Test-agent mini-apps (victims) + runtime state — source only, no venv/db
+# -----------------------------------------------------------------------
+__pycache__/
+*.pyc
+test_agents/venv/
+test_agents/**/__pycache__/
+*_state.sqlite
+test_agents/*.sqlite
+frontend/*.db
